@@ -32,10 +32,10 @@ class DatabaseHelper {
       String path = join(await sqflite.getDatabasesPath(), 'study_scheduler.db');
       
       return await sqflite.openDatabase(
-        path,
+      path,
         version: 4,
-        onCreate: _onCreate,
-        onUpgrade: _onUpgrade,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
         onDowngrade: _onDowngrade,
       );
     } catch (e) {
@@ -139,35 +139,35 @@ class DatabaseHelper {
       // Create activities table
       await _createActivitiesTable(db);
 
-      // Create study materials table
-      await db.execute('''
+    // Create study materials table
+    await db.execute('''
         CREATE TABLE IF NOT EXISTS study_materials(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          description TEXT,
-          category TEXT NOT NULL,
-          filePath TEXT,
-          fileType TEXT,
-          fileUrl TEXT,
-          isOnline INTEGER DEFAULT 0,
-          createdAt TEXT NOT NULL,
-          updatedAt TEXT NOT NULL
-        )
-      ''');
-      
-      // Create AI usage tracking table
-      await db.execute('''
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL,
+        filePath TEXT,
+        fileType TEXT,
+        fileUrl TEXT,
+        isOnline INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    
+    // Create AI usage tracking table
+    await db.execute('''
         CREATE TABLE IF NOT EXISTS ai_usage_tracking(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          materialId INTEGER,
-          aiService TEXT NOT NULL,
-          queryText TEXT,
-          usageDate TEXT NOT NULL,
-          FOREIGN KEY (materialId) REFERENCES study_materials (id) ON DELETE CASCADE
-        )
-      ''');
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        materialId INTEGER,
+        aiService TEXT NOT NULL,
+        queryText TEXT,
+        usageDate TEXT NOT NULL,
+        FOREIGN KEY (materialId) REFERENCES study_materials (id) ON DELETE CASCADE
+      )
+    ''');
 
-      // Create indexes for faster queries
+    // Create indexes for faster queries
       await db.execute('CREATE INDEX IF NOT EXISTS idx_activities_scheduleId ON activities(scheduleId)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_activities_startTime ON activities(startTime)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_study_materials_category ON study_materials(category)');
@@ -203,12 +203,12 @@ class DatabaseHelper {
       final map = schedule.toMap();
       map['updatedAt'] = DateTime.now().toIso8601String();
       
-      return await db.update(
-        'schedules',
+    return await db.update(
+      'schedules',
         map,
-        where: 'id = ?',
-        whereArgs: [schedule.id],
-      );
+      where: 'id = ?',
+      whereArgs: [schedule.id],
+    );
     } catch (e) {
       _logger.error('Error updating schedule: $e');
       rethrow;
@@ -218,11 +218,11 @@ class DatabaseHelper {
   Future<int> deleteSchedule(int id) async {
     try {
       final sqflite.Database db = await database;
-      return await db.delete(
-        'schedules',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+    return await db.delete(
+      'schedules',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     } catch (e) {
       _logger.error('Error deleting schedule: $e');
       rethrow;
@@ -273,7 +273,7 @@ class DatabaseHelper {
   // Activity operations
   Future<List<Activity>> getActivitiesForDay(DateTime day) async {
     try {
-      final db = await database;
+    final db = await database;
       
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
         SELECT 
@@ -304,8 +304,8 @@ class DatabaseHelper {
       ''', [day.weekday]);
       
       _logger.info('Retrieved ${maps.length} activities for day ${day.weekday}');
-      
-      return List.generate(maps.length, (i) {
+    
+    return List.generate(maps.length, (i) {
         final map = maps[i];
         try {
           return Activity(
@@ -356,9 +356,9 @@ class DatabaseHelper {
 
   Future<List<Activity>> getActivities() async {
     try {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'activities',
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'activities',
         orderBy: 'startTime ASC'
       );
       return List.generate(maps.length, (i) => Activity.fromMap(maps[i]));
@@ -370,11 +370,11 @@ class DatabaseHelper {
 
   Future<List<Activity>> getActivitiesByScheduleId(int scheduleId) async {
     try {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'activities',
-        where: 'scheduleId = ?',
-        whereArgs: [scheduleId],
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'activities',
+      where: 'scheduleId = ?',
+      whereArgs: [scheduleId],
         orderBy: 'startTime ASC'
       );
       
@@ -423,8 +423,8 @@ class DatabaseHelper {
       ''', [now.weekday]);
       
       _logger.info('Retrieved ${maps.length} upcoming activities');
-      
-      return List.generate(maps.length, (i) {
+    
+    return List.generate(maps.length, (i) {
         final map = maps[i];
         try {
           return Activity(
@@ -475,7 +475,7 @@ class DatabaseHelper {
 
   Future<List<Activity>> getCompletedActivities() async {
     try {
-      final db = await database;
+    final db = await database;
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day).toIso8601String();
       final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59).toIso8601String();
@@ -505,8 +505,8 @@ class DatabaseHelper {
   Future<List<Activity>> getActivitiesForSchedule(int scheduleId) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'activities',
+    final List<Map<String, dynamic>> maps = await db.query(
+      'activities',
         where: 'scheduleId = ?',
         whereArgs: [scheduleId],
         orderBy: 'startTime ASC'
@@ -521,14 +521,14 @@ class DatabaseHelper {
 
   Future<int> insertActivity(Activity activity) async {
     try {
-      final db = await database;
+    final db = await database;
       final now = DateTime.now();
-      
-      final map = activity.toMap();
+    
+    final map = activity.toMap();
       map['createdAt'] = now.toIso8601String();
       map['updatedAt'] = now.toIso8601String();
-      
-      return await db.insert('activities', map);
+    
+    return await db.insert('activities', map);
     } catch (e) {
       _logger.error('Error inserting activity: $e');
       rethrow;
@@ -537,16 +537,16 @@ class DatabaseHelper {
 
   Future<int> updateActivity(Activity activity) async {
     try {
-      final db = await database;
-      final map = activity.toMap();
+    final db = await database;
+    final map = activity.toMap();
       map['updatedAt'] = DateTime.now().toIso8601String();
-      
-      return await db.update(
-        'activities',
-        map,
-        where: 'id = ?',
-        whereArgs: [activity.id],
-      );
+    
+    return await db.update(
+      'activities',
+      map,
+      where: 'id = ?',
+      whereArgs: [activity.id],
+    );
     } catch (e) {
       _logger.error('Error updating activity: $e');
       rethrow;
@@ -555,12 +555,12 @@ class DatabaseHelper {
 
   Future<int> deleteActivity(int id) async {
     try {
-      final db = await database;
-      return await db.delete(
-        'activities',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+    final db = await database;
+    return await db.delete(
+      'activities',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     } catch (e) {
       _logger.error('Error deleting activity: $e');
       rethrow;
@@ -611,7 +611,7 @@ class DatabaseHelper {
         'study_materials',
         orderBy: 'updatedAt DESC'
       );
-      return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
+    return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
     } catch (e) {
       _logger.error('Error getting study materials: $e');
       return [];
@@ -635,13 +635,13 @@ class DatabaseHelper {
   Future<List<StudyMaterial>> getStudyMaterialsByCategory(String category) async {
     try {
       final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'study_materials',
-        where: 'category = ?',
-        whereArgs: [category],
+    final List<Map<String, dynamic>> maps = await db.query(
+      'study_materials',
+      where: 'category = ?',
+      whereArgs: [category],
         orderBy: 'updatedAt DESC'
-      );
-      return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
+    );
+    return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
     } catch (e) {
       _logger.error('Error getting study materials by category: $e');
       return [];
@@ -855,7 +855,7 @@ class DatabaseHelper {
       rethrow;
     }
   }
-
+  
   Future<void> resetDatabase() async {
     try {
       final dbPath = await sqflite.getDatabasesPath();

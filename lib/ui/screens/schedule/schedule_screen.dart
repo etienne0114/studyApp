@@ -50,6 +50,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   
   List<Schedule> _schedules = [];
   List<Activity> _activities = [];
+  Map<DateTime, List<Activity>> _activitiesByDay = {};
   int? _selectedScheduleId;
   bool _isLoading = true;
   final _titleController = TextEditingController();
@@ -95,6 +96,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         _activities = await db.getActivitiesForSchedule(_selectedScheduleId!);
       } else {
         _activities = await db.getActivitiesForDay(_selectedDay);
+      }
+
+      // Group activities by day for calendar highlighting
+      _activitiesByDay = {};
+      for (var activity in _activities) {
+        final date = DateTime(
+          _selectedDay.year,
+          _selectedDay.month,
+          _selectedDay.day,
+        );
+        if (activity.dayOfWeek == date.weekday) {
+          if (!_activitiesByDay.containsKey(date)) {
+            _activitiesByDay[date] = [];
+          }
+          _activitiesByDay[date]!.add(activity);
+        }
       }
       
       setState(() => _isLoading = false);
@@ -200,23 +217,27 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             _calendarFormat = format;
           });
         },
-        onPageChanged: (focusedDay) {
-          _focusedDay = focusedDay;
+        eventLoader: (day) {
+          return _activitiesByDay[DateTime(
+            day.year,
+            day.month,
+            day.day,
+          )] ?? [];
         },
         calendarStyle: CalendarStyle(
-          todayDecoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.5),
+          markersMaxCount: 4,
+          markerDecoration: const BoxDecoration(
+            color: Colors.blue,
             shape: BoxShape.circle,
           ),
           selectedDecoration: const BoxDecoration(
-            color: AppColors.primary,
+            color: Colors.blue,
             shape: BoxShape.circle,
           ),
-          markersMaxCount: 3,
-        ),
-        headerStyle: const HeaderStyle(
-          titleCentered: true,
-          formatButtonShowsNext: false,
+          todayDecoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.3),
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );
@@ -333,9 +354,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 MaterialPageRoute(
                   builder: (context) => AddActivityScreen(
                     scheduleId: widget.selectedSchedule?.id ?? _schedules.first.id!,
+                    selectedDate: _selectedDay,
                   ),
                 ),
-              );
+              ).then((result) {
+                if (result == true) {
+                  _loadData();
+                }
+              });
             },
             icon: const Icon(Icons.add),
             label: const Text('Add Activity'),
@@ -385,15 +411,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       MaterialPageRoute(
         builder: (context) => AddActivityScreen(
           scheduleId: widget.selectedSchedule?.id ?? _schedules.first.id!,
+          selectedDate: _selectedDay,
         ),
       ),
     ).then((result) {
       if (result == true) {
-        _loadActivitiesForSelectedDay().then((activities) {
-          setState(() {
-            _activities = activities;
-          });
-        });
+        _loadData(); // Reload all data to update the calendar
       }
     });
   }
