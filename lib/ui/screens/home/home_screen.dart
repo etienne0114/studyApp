@@ -318,11 +318,15 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) => AddActivityScreen(
           scheduleId: activity.scheduleId,
           activity: activity,
+          selectedDate: DateTime.now().subtract(
+            Duration(days: DateTime.now().weekday - activity.dayOfWeek),
+          ),
+          initialDayOfWeek: activity.dayOfWeek,
         ),
       ),
     );
     if (result == true && mounted) {
-      _loadData(); // Refresh data after editing
+      _loadData();
     }
   }
   
@@ -334,20 +338,49 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Today\'s Completed',
+              'Completed Activities',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _currentIndex = 2; // Switch to Schedule tab
-                });
-              },
-              child: const Text('View All'),
-            ),
+            if (_completedActivities.isNotEmpty)
+              TextButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Clear All Completed'),
+                      content: const Text('Are you sure you want to delete all completed activities?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Delete All'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true && mounted) {
+                    await DatabaseHelper.instance.deleteAllCompletedActivities();
+                    _loadData();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('All completed activities deleted'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.delete_sweep),
+                label: const Text('Clear All'),
+              ),
           ],
         ),
         const SizedBox(height: 8),
@@ -355,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const Center(child: CircularProgressIndicator())
         else if (_completedActivities.isEmpty)
           _buildEmptyCard(
-            'No completed activities today',
+            'No completed activities',
             'Complete some activities to see them here',
             Icons.check_circle,
           )
@@ -363,59 +396,101 @@ class _HomeScreenState extends State<HomeScreen> {
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _completedActivities.length > 3 ? 3 : _completedActivities.length,
+            itemCount: _completedActivities.length,
             itemBuilder: (context, index) {
               final activity = _completedActivities[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Color(int.parse(activity.scheduleColor?.substring(1) ?? '2196F3', radix: 16) + 0xFF000000),
-                    child: Text(
-                      activity.scheduleTitle?[0] ?? '?',
-                      style: const TextStyle(color: Colors.white),
-                    ),
+              return Dismissible(
+                key: Key('completed_activity_${activity.id}'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20.0),
+                  color: Colors.red,
+                  child: const Icon(
+                    Icons.delete,
+                    color: Colors.white,
                   ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          activity.title,
-                          style: const TextStyle(
-                            decoration: TextDecoration.lineThrough,
-                            color: Colors.grey,
+                ),
+                onDismissed: (direction) async {
+                  if (activity.id != null) {
+                    await DatabaseHelper.instance.deleteCompletedActivity(activity.id!);
+                    setState(() {
+                      _completedActivities.removeAt(index);
+                    });
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${activity.title} deleted'),
+                          action: SnackBarAction(
+                            label: 'Undo',
+                            onPressed: () {
+                              _loadData(); // Reload all data to restore the activity
+                            },
                           ),
                         ),
+                      );
+                    }
+                  }
+                },
+                child: Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Color(int.parse(activity.scheduleColor?.substring(1) ?? '2196F3', radix: 16) + 0xFF000000),
+                      child: Text(
+                        activity.scheduleTitle?[0] ?? '?',
+                        style: const TextStyle(color: Colors.white),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.green, size: 16),
-                            SizedBox(width: 4),
-                            Text(
-                              'Completed',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            activity.title,
+                            style: const TextStyle(
+                              decoration: TextDecoration.lineThrough,
+                              color: Colors.grey,
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.green, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'Completed',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${activity.startTime.format(context)} - ${activity.endTime.format(context)}',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        Text(
+                          'Completed on ${activity.activityDate}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
-                  subtitle: Text(
-                    '${activity.startTime.format(context)} - ${activity.endTime.format(context)}',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                  onTap: () => _editActivity(activity),
                 ),
               );
             },
@@ -709,15 +784,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                     return;
                   }
+                  final now = DateTime.now();
                   final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddActivityScreen(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddActivityScreen(
                         scheduleId: _schedules.first.id!,
-              ),
-            ),
-          );
-                  if (result == true && mounted) {
+                        selectedDate: now,
+                        initialDayOfWeek: now.weekday,
+                      ),
+                    ),
+                  );
+                  if (result == true) {
                     _loadData();
                   }
                 },
@@ -728,11 +806,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   Navigator.pop(context);
                   final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddMaterialScreen(),
-            ),
-          );
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AddMaterialScreen(),
+                    ),
+                  );
                   if (result == true && mounted) {
                     _loadData();
                   }
