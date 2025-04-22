@@ -7,7 +7,7 @@ import 'package:study_scheduler/data/helpers/ai_helper.dart';
 import 'package:study_scheduler/ui/screens/materials/material_detail_screen.dart';
 import 'package:study_scheduler/ui/screens/materials/add_material_screen.dart';
 import 'package:study_scheduler/data/helpers/logger.dart';
-import 'package:study_scheduler/data/helpers/database_helper.dart';
+import 'package:study_scheduler/data/database/database_helper.dart';
 
 class MaterialsScreen extends StatefulWidget {
   const MaterialsScreen({super.key});

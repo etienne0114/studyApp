@@ -99,7 +99,7 @@ class StudyMaterialsRepository {
       final db = await _databaseManager.database;
       final List<Map<String, dynamic>> maps = await db.query(
         'study_materials',
-        orderBy: 'updatedAt DESC',
+        orderBy: 'createdAt DESC',
         limit: 5
       );
       return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));

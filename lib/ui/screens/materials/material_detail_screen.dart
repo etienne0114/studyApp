@@ -5,6 +5,7 @@ import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:study_scheduler/helpers/ai_helper.dart';
 import 'package:study_scheduler/ui/screens/materials/add_material_screen.dart';
 import 'package:study_scheduler/data/repositories/study_materials_repository.dart';
+import 'package:study_scheduler/utils/logger.dart';
 
 class MaterialDetailScreen extends StatefulWidget {
   final StudyMaterial material;
@@ -21,6 +22,8 @@ class MaterialDetailScreen extends StatefulWidget {
 class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   final StudyMaterialsRepository _repository = StudyMaterialsRepository();
   late StudyMaterial _material;
+  bool _isLoading = true;
+  final _logger = Logger();
   
   @override
   void initState() {
@@ -45,7 +48,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                 ),
               ).then((_) {
                 // Refresh material data
-                _refreshMaterial();
+                _loadMaterial();
               });
             },
           ),
@@ -77,16 +80,25 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     );
   }
   
-  Future<void> _refreshMaterial() async {
+  Future<void> _loadMaterial() async {
+    if (_material.id == null) return;
+    
+    setState(() => _isLoading = true);
     try {
-      final updatedMaterial = await _repository.getMaterialById(_material.id);
+      final updatedMaterial = await _repository.getMaterialById(_material.id!);
       if (updatedMaterial != null && mounted) {
         setState(() {
           _material = updatedMaterial;
+          _isLoading = false;
         });
       }
     } catch (e) {
-      // Handle error silently
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading material: $e')),
+        );
+      }
     }
   }
 
@@ -523,26 +535,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           TextButton(
             onPressed: () async {
               // Delete material and return to previous screen
-              try {
-                await _repository.deleteMaterial(_material.id);
-                if (mounted) {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Return to materials list
-                  
-                  // Show success message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Material deleted successfully')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  Navigator.pop(context); // Close dialog
-                  // Show error message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting material: $e')),
-                  );
-                }
-              }
+              await _deleteMaterial();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
@@ -550,5 +543,30 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteMaterial() async {
+    if (_material.id == null) {
+      Navigator.pop(context);
+      return;
+    }
+
+    try {
+      final success = await _repository.deleteMaterial(_material.id!);
+      if (mounted) {
+        Navigator.pop(context);
+        if (success > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Material deleted successfully')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting material: $e')),
+        );
+      }
+    }
   }
 }

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
@@ -40,21 +39,33 @@ class NotificationService {
       _logger.info('Notification service initialized successfully');
     } catch (e, stackTrace) {
       _logger.error('Error initializing notification service', e, stackTrace);
-      rethrow;
     }
   }
 
   Future<bool> requestPermissions() async {
     try {
-      final androidGranted = await _notifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+      // Request Android permissions
+      final androidImplementation = _notifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+          
+      if (androidImplementation != null) {
+        await androidImplementation.requestNotificationsPermission();
+        await androidImplementation.requestExactAlarmsPermission();
+      }
 
-      final iosGranted = await _notifications
-          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(alert: true, badge: true, sound: true);
+      // Request iOS permissions
+      final iosImplementation = _notifications
+          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+          
+      if (iosImplementation != null) {
+        await iosImplementation.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
 
-      return (androidGranted ?? false) || (iosGranted ?? false);
+      return true;
     } catch (e, stackTrace) {
       _logger.error('Error requesting notification permissions', e, stackTrace);
       return false;
@@ -64,6 +75,18 @@ class NotificationService {
   Future<void> scheduleActivityNotification(Activity activity) async {
     try {
       if (!activity.notificationEnabled) return;
+
+      // Check permissions first
+      final androidImplementation = _notifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+          
+      if (androidImplementation != null) {
+        final hasPermission = await androidImplementation.areNotificationsEnabled() ?? false;
+        if (!hasPermission) {
+          await requestPermissions();
+          return; // Don't schedule if we don't have permission
+        }
+      }
 
       final now = DateTime.now();
       final notificationTime = DateTime(
@@ -75,45 +98,86 @@ class NotificationService {
           ? notificationTime.add(const Duration(days: 1)) 
           : notificationTime;
 
-      await _scheduleNotification(activity, scheduledTime);
+      try {
+        await _scheduleNotification(activity, scheduledTime);
+      } catch (e) {
+        if (e.toString().contains('exact_alarms_not_permitted')) {
+          // Handle exact alarm permission error gracefully
+          _logger.info('Exact alarms not permitted, scheduling inexact notification');
+          await _scheduleInexactNotification(activity, scheduledTime);
+        } else {
+          rethrow;
+        }
+      }
     } catch (e, stackTrace) {
       _logger.error('Error scheduling notification for activity: ${activity.title}', e, stackTrace);
     }
   }
 
+  Future<void> _scheduleInexactNotification(Activity activity, DateTime scheduledTime) async {
+    final androidDetails = AndroidNotificationDetails(
+      'study_scheduler_channel', 'Study Scheduler Notifications',
+      channelDescription: 'Notifications for study activities',
+      importance: Importance.high,
+      priority: Priority.high,
+      enableVibration: true,
+      enableLights: true,
+      color: activity.scheduleColorAsColor,
+    );
+
+    final iosDetails = const DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.zonedSchedule(
+      activity.id ?? 0,
+      activity.title,
+      'Starting in ${activity.notificationMinutesBefore} minutes',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+    );
+  }
+
   Future<void> _scheduleNotification(Activity activity, DateTime scheduledTime) async {
-    try {
-      final androidDetails = AndroidNotificationDetails(
-        'study_scheduler_channel', 'Study Scheduler Notifications',
-        channelDescription: 'Notifications for study activities',
-        importance: Importance.high, priority: Priority.high,
-        enableVibration: true, enableLights: true,
-        color: Color(activity.scheduleColor ?? 0xFF2196F3),
-      );
+    final androidDetails = AndroidNotificationDetails(
+      'study_scheduler_channel', 'Study Scheduler Notifications',
+      channelDescription: 'Notifications for study activities',
+      importance: Importance.high,
+      priority: Priority.high,
+      enableVibration: true,
+      enableLights: true,
+      color: activity.scheduleColorAsColor,
+    );
 
-      final iosDetails = DarwinNotificationDetails(
-        presentAlert: true, presentBadge: true, presentSound: true,
-      );
+    final iosDetails = const DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
 
-      final details = NotificationDetails(
-        android: androidDetails, iOS: iosDetails,
-      );
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
 
-              await _notifications.zonedSchedule(
-        activity.id ?? 0, activity.title,
-        'Starting in ${activity.notificationMinutesBefore} minutes',
-        tz.TZDateTime.from(scheduledTime, tz.local), details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        // Updated to use the correct enum
-        
-        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      );
-
-      _logger.info('Scheduled notification for activity: ${activity.title} at $scheduledTime');
-    } catch (e, stackTrace) {
-      _logger.error('Error scheduling notification', e, stackTrace);
-      rethrow;
-    }
+    await _notifications.zonedSchedule(
+      activity.id ?? 0,
+      activity.title,
+      'Starting in ${activity.notificationMinutesBefore} minutes',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+    );
   }
 
   Future<void> cancelActivityNotification(int activityId) async {

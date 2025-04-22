@@ -1,7 +1,7 @@
 // lib/data/models/study_material.dart
 
 class StudyMaterial {
-  final int id;
+  final int? id;
   String title;
   String? description;
   String category;
@@ -13,7 +13,7 @@ class StudyMaterial {
   String updatedAt;
 
   StudyMaterial({
-    required this.id,
+    this.id,
     required this.title,
     this.description,
     required this.category,
@@ -27,7 +27,7 @@ class StudyMaterial {
 
   factory StudyMaterial.fromMap(Map<String, dynamic> map) {
     return StudyMaterial(
-      id: map['id'] as int,
+      id: map['id'] as int?,
       title: map['title'] as String,
       description: map['description'] as String?,
       category: map['category'] as String,
@@ -41,8 +41,8 @@ class StudyMaterial {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
+    final map = {
+      if (id != null && id != 0) 'id': id,
       'title': title,
       'description': description,
       'category': category,
@@ -53,6 +53,7 @@ class StudyMaterial {
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
+    return map;
   }
 
   @override

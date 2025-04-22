@@ -6,8 +6,8 @@ class Schedule {
   final int? id;
   final String title;
   final String? description;
-  final String color;
-  final int isActive; // 1 = active, 0 = inactive
+  final String color;  // Store color as hex string
+  final int isActive;
   final String createdAt;
   final String updatedAt;
 
@@ -32,7 +32,7 @@ class Schedule {
         return Color(int.parse('0xFF$color'));
       }
     } catch (e) {
-      return Colors.grey; // Default color if parsing fails
+      return Colors.blue; // Default color if parsing fails
     }
   }
 
@@ -67,16 +67,16 @@ class Schedule {
       title: map['title'] as String,
       description: map['description'] as String?,
       color: map['color'] as String,
-      isActive: map['isActive'] as int? ?? 1,
-      createdAt: map['createdAt'] as String,
-      updatedAt: map['updatedAt'] as String,
+      isActive: (map['isActive'] as int?) ?? 1,
+      createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+      updatedAt: map['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
     );
   }
 
   // Convert Schedule to a Map
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
+      if (id != null) 'id': id,
       'title': title,
       'description': description,
       'color': color,

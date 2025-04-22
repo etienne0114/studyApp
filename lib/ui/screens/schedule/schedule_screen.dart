@@ -6,6 +6,7 @@ import 'package:study_scheduler/data/database/database_helper.dart';
 import 'package:study_scheduler/data/models/activity.dart';
 import 'package:study_scheduler/data/models/schedule.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_activity_screen.dart';
+import 'package:study_scheduler/ui/screens/schedule/add_schedule_screen.dart';
 import 'package:study_scheduler/ui/screens/home/widgets/upcoming_activities.dart';
 import 'package:intl/intl.dart';
 import 'package:study_scheduler/data/helpers/logger.dart';
@@ -301,6 +302,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
+              if (_schedules.isEmpty) {
+                // Show dialog to create a schedule first
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('No Schedule'),
+                    content: const Text('Please create a schedule first before adding activities.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          // Navigate to create schedule screen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AddScheduleScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text('Create Schedule'),
+                      ),
+                    ],
+                  ),
+                );
+                return;
+              }
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -327,6 +354,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _navigateToAddActivity() {
+    if (_schedules.isEmpty) {
+      // Show dialog to create a schedule first
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No Schedule'),
+          content: const Text('Please create a schedule first before adding activities.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Navigate to create schedule screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddScheduleScreen(),
+                  ),
+                );
+              },
+              child: const Text('Create Schedule'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(

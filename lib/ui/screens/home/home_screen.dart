@@ -13,12 +13,11 @@ import 'package:study_scheduler/ui/screens/profile/profile_screen.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_activity_screen.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_schedule_screen.dart';
 import 'package:study_scheduler/ui/screens/schedule/schedule_screen.dart';
-import 'package:study_scheduler/ui/screens/home/widgets/upcoming_activities.dart';
 import 'package:study_scheduler/ui/screens/home/widgets/schedule_card.dart';
 import 'package:study_scheduler/ui/screens/materials/materials_screen.dart';
 import 'package:study_scheduler/ui/screens/materials/add_material_screen.dart';
 import 'package:study_scheduler/ui/screens/materials/material_detail_screen.dart';
-import 'package:study_scheduler/data/helpers/database_helper.dart';
+import 'package:study_scheduler/data/database/database_helper.dart';
 import 'package:study_scheduler/data/helpers/ai_helper.dart';
 import 'package:study_scheduler/data/helpers/logger.dart';
 
@@ -72,16 +71,40 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      _logger.info('Starting to load data...');
       final db = DatabaseHelper.instance;
+      final now = DateTime.now();
+      
+      // Load schedules
+      _logger.info('Loading schedules...');
       _schedules = await db.getSchedules();
-      _upcomingActivities = await db.getUpcomingActivities();
+      _logger.info('Loaded ${_schedules.length} schedules');
+      
+      // Load upcoming activities for today
+      _logger.info('Loading upcoming activities...');
+      _upcomingActivities = await db.getUpcomingActivities(now);
+      _logger.info('Loaded ${_upcomingActivities.length} upcoming activities');
+      
+      // Load completed activities for today
+      _logger.info('Loading completed activities...');
       _completedActivities = await db.getCompletedActivities();
+      _logger.info('Loaded ${_completedActivities.length} completed activities');
+      
+      // Load recent materials
+      _logger.info('Loading recent materials...');
       _recentMaterials = await db.getRecentMaterials();
-      setState(() => _isLoading = false);
-    } catch (e) {
-      _logger.error('Error loading data: $e');
-      setState(() => _isLoading = false);
+      _logger.info('Loaded ${_recentMaterials.length} recent materials');
+      
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _logger.info('Data loading completed successfully');
+      }
+    } catch (e, stackTrace) {
+      _logger.error('Error loading data: $e\n$stackTrace');
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading data: $e')),
         );
@@ -91,232 +114,125 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> screens = [
+      _buildHomeContent(),
+      const MaterialsScreen(),
+      const ScheduleScreen(),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Study Scheduler'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileScreen(),
-                ),
-              );
-            },
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildBody(),
-      floatingActionButton: _buildFloatingActionButton(),
-      bottomNavigationBar: _buildBottomNavigationBar(),
+      body: screens[_currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.book_outlined),
+            selectedIcon: Icon(Icons.book),
+            label: 'Materials',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_today_outlined),
+            selectedIcon: Icon(Icons.calendar_today),
+            label: 'Schedule',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddOptions(context),
+        child: const Icon(Icons.add),
+      ),
     );
   }
   
-  Widget _buildBody() {
-    switch (_currentIndex) {
-      case 0:
-        return _buildHomeContent();
-      case 1:
-        return const ScheduleScreen();
-      case 2:
-        return const MaterialsScreen();
-      case 3:
-        return const ProfileScreen();
-      default:
-        return _buildHomeContent();
-    }
-  }
-  
   Widget _buildHomeContent() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildWelcomeSection(),
-            const SizedBox(height: 16),
-            _buildAIAssistantCard(),
-            const SizedBox(height: 16),
-            _buildUpcomingActivitiesSection(),
-            const SizedBox(height: 16),
-            _buildSchedulesSection(),
-            const SizedBox(height: 16),
-            _buildRecentMaterialsSection(),
-            const SizedBox(height: 16),
-            _buildCompletedActivitiesSection(),
-          ],
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildWelcomeSection(),
+              const SizedBox(height: 24),
+              _buildUpcomingActivitiesSection(),
+              const SizedBox(height: 24),
+              _buildCompletedActivitiesSection(),
+              const SizedBox(height: 24),
+              _buildSchedulesSection(),
+              const SizedBox(height: 24),
+              _buildRecentMaterialsSection(),
+            ],
+          ),
         ),
       ),
     );
   }
   
   Widget _buildWelcomeSection() {
-    final now = DateTime.now();
-    final hour = now.hour;
-    String greeting;
-    
-    if (hour < 12) {
-      greeting = 'Good morning';
-    } else if (hour < 18) {
-      greeting = 'Good afternoon';
-    } else {
-      greeting = 'Good evening';
+    if (_schedules.isEmpty && _upcomingActivities.isEmpty && _recentMaterials.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.school, size: 64, color: Colors.blue),
+            const SizedBox(height: 16),
+            Text(
+              'Welcome to Study Scheduler',
+              style: AppStyles.heading2,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Get started by creating your first schedule',
+              textAlign: TextAlign.center,
+              style: AppStyles.bodyLarge,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddScheduleScreen(),
+                  ),
+                );
+                if (result == true && mounted) {
+                  _loadData();
+                }
+              },
+              child: const Text('Create Schedule'),
+            ),
+          ],
+        ),
+      );
     }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          greeting,
-          style: AppStyles.heading1,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Here\'s your study overview for today',
-          style: AppStyles.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildAIAssistantCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: _showAIAssistant,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _aiManager.getServiceColor(_aiManager.preferredService).withAlpha(30),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.psychology_alt,
-                      color: _aiManager.getServiceColor(_aiManager.preferredService),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'AI Learning Assistant',
-                          style: AppStyles.heading3,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Get help with your studies',
-                          style: AppStyles.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildAIActionButton(
-                    icon: Icons.lightbulb_outline,
-                    label: 'Study Tips',
-                    onTap: () {
-                      AIAssistantDialog.show(
-                        context,
-                        initialQuestion: 'Give me some study tips for today',
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  _buildAIActionButton(
-                    icon: Icons.calendar_today,
-                    label: 'Schedule Help',
-                    onTap: () {
-                      AIAssistantDialog.show(
-                        context,
-                        initialQuestion: 'Help me plan my study schedule',
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  _buildAIActionButton(
-                    icon: Icons.code,
-                    label: 'Code Help',
-                    onTap: () {
-                      AIAssistantDialog.show(
-                        context,
-                        initialQuestion: 'Help me with programming',
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildAIActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: _aiManager.getServiceColor(_aiManager.preferredService),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: AppStyles.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return const SizedBox.shrink();
   }
   
   Widget _buildUpcomingActivitiesSection() {
@@ -326,261 +242,244 @@ class _HomeScreenState extends State<HomeScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Today\'s Activities',
-              style: AppStyles.heading2,
+            const Text(
+              'Upcoming Activities',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  _currentIndex = 1; // Switch to schedule tab
-                });
-              },
+              onPressed: () => Navigator.pushNamed(context, '/activities'),
               child: const Text('View All'),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        _upcomingActivities.isEmpty
-            ? _buildEmptyActivitiesCard()
-            : UpcomingActivities(activities: _upcomingActivities),
+        const SizedBox(height: 8),
+        FutureBuilder<List<Activity>>(
+          future: _getUpcomingActivities(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('Error: ${snapshot.error}'),
+              );
+            }
+            
+            final activities = snapshot.data ?? [];
+            
+            if (activities.isEmpty) {
+              return _buildEmptyCard(
+                'No upcoming activities',
+                'Add activities to your schedule to see them here',
+                Icons.event,
+              );
+            }
+            
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: activities.length > 3 ? 3 : activities.length,
+              itemBuilder: (context, index) {
+                final activity = activities[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Color(int.parse(activity.scheduleColor?.substring(1) ?? '2196F3', radix: 16) + 0xFF000000),
+                      child: Text(
+                        activity.scheduleTitle?[0] ?? '?',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    title: Text(activity.title),
+                    subtitle: Text(
+                      '${activity.startTime.format(context)} - ${activity.endTime.format(context)}',
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.check_circle_outline),
+                      onPressed: () => _markActivityAsCompleted(activity),
+                    ),
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      '/activity-details',
+                      arguments: activity,
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ],
     );
   }
   
-  Widget _buildEmptyActivitiesCard() {
-    final hasSchedules = _schedules.isNotEmpty;
-    final schedule = _selectedSchedule ?? (hasSchedules ? _schedules.first : null);
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(
-              Icons.event_busy,
-              size: 48,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              hasSchedules ? 'No activities scheduled for today' : 'No schedules created yet',
-              style: AppStyles.bodyLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              hasSchedules 
-                ? 'Add activities to your schedule to see them here'
-                : 'Create a schedule to start adding activities',
-              style: AppStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => hasSchedules 
-                      ? AddActivityScreen(scheduleId: schedule!.id!)
-                      : const AddScheduleScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: Text(hasSchedules ? 'Add Activity' : 'Create Schedule'),
-              style: AppStyles.primaryButton,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildSchedulesSection() {
+  Widget _buildCompletedActivitiesSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Your Schedules',
-              style: AppStyles.heading2,
+            const Text(
+              'Today\'s Completed',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  _currentIndex = 1; // Switch to schedule tab
-                });
-              },
+              onPressed: () => Navigator.pushNamed(context, '/activities'),
               child: const Text('View All'),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        _schedules.isEmpty
-            ? _buildEmptySchedulesCard()
-            : SizedBox(
-                height: 160,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _schedules.length,
-                  itemBuilder: (context, index) {
-                    final schedule = _schedules[index];
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: index < _schedules.length - 1 ? 16 : 0,
+        const SizedBox(height: 8),
+        FutureBuilder<List<Activity>>(
+          future: _getCompletedActivities(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('Error: ${snapshot.error}'),
+              );
+            }
+            
+            final activities = snapshot.data ?? [];
+            
+            if (activities.isEmpty) {
+              return _buildEmptyCard(
+                'No completed activities today',
+                'Complete some activities to see them here',
+                Icons.check_circle,
+              );
+            }
+            
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: activities.length > 3 ? 3 : activities.length,
+              itemBuilder: (context, index) {
+                final activity = activities[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Color(int.parse(activity.scheduleColor?.substring(1) ?? '2196F3', radix: 16) + 0xFF000000),
+                      child: Text(
+                        activity.scheduleTitle?[0] ?? '?',
+                        style: const TextStyle(color: Colors.white),
                       ),
-                      child: ScheduleCard(schedule: schedule),
-                    );
-                  },
-                ),
-              ),
+                    ),
+                    title: Text(activity.title),
+                    subtitle: Text(
+                      '${activity.startTime.format(context)} - ${activity.endTime.format(context)}',
+                    ),
+                    trailing: const Icon(Icons.check_circle, color: Colors.green),
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      '/activity-details',
+                      arguments: activity,
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ],
     );
   }
   
-  Widget _buildEmptySchedulesCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(
-              Icons.calendar_today,
-              size: 48,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No schedules created yet',
-              style: AppStyles.bodyLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Create a schedule to organize your study activities',
-              style: AppStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AddScheduleScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Create Schedule'),
-              style: AppStyles.primaryButton,
-            ),
-          ],
+  Future<List<Activity>> _getUpcomingActivities() async {
+    try {
+      return await DatabaseHelper.instance.getUpcomingActivities();
+    } catch (e) {
+      _logger.error('Error getting upcoming activities: $e');
+      return [];
+    }
+  }
+  
+  Future<List<Activity>> _getCompletedActivities() async {
+    try {
+      return await DatabaseHelper.instance.getCompletedActivities();
+    } catch (e) {
+      _logger.error('Error getting completed activities: $e');
+      return [];
+    }
+  }
+  
+  Future<void> _markActivityAsCompleted(Activity activity) async {
+    try {
+      activity.isCompleted = true;
+      await DatabaseHelper.instance.updateActivity(activity);
+      _refreshData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Activity marked as completed')),
+      );
+    } catch (e) {
+      _logger.error('Error marking activity as completed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+  
+  Widget _buildSchedulesSection() {
+    if (_schedules.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Your Schedules', style: AppStyles.heading2),
+        const SizedBox(height: 16),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _schedules.length,
+          itemBuilder: (context, index) {
+            final schedule = _schedules[index];
+            return _buildScheduleCard(schedule);
+          },
         ),
-      ),
+      ],
     );
   }
   
   Widget _buildRecentMaterialsSection() {
+    if (_recentMaterials.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Recent Materials',
-              style: AppStyles.heading2,
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _currentIndex = 2; // Switch to materials tab
-                });
-              },
-              child: const Text('View All'),
-            ),
-          ],
-        ),
+        Text('Recent Materials', style: AppStyles.heading2),
         const SizedBox(height: 16),
-        _recentMaterials.isEmpty
-            ? _buildEmptyMaterialsCard()
-            : ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _recentMaterials.length,
-                itemBuilder: (context, index) {
-                  final material = _recentMaterials[index];
-                  return _buildMaterialCard(material);
-                },
-              ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _recentMaterials.length,
+          itemBuilder: (context, index) {
+            final material = _recentMaterials[index];
+            return _buildMaterialCard(material);
+          },
+        ),
       ],
     );
   }
   
-  Widget _buildEmptyMaterialsCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(
-              Icons.book,
-              size: 48,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No study materials added yet',
-              style: AppStyles.bodyLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add study materials to keep track of your resources',
-              style: AppStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AddMaterialScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Material'),
-              style: AppStyles.primaryButton,
-            ),
-          ],
-        ),
-      ),
-    );
+  Widget _buildScheduleCard(Schedule schedule) {
+    return ScheduleCard(schedule: schedule);
   }
   
   Widget _buildMaterialCard(StudyMaterial material) {
@@ -691,88 +590,30 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
   
-  Widget _buildCompletedActivitiesSection() {
-    if (_completedActivities.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Completed Today',
-          style: AppStyles.heading2,
-        ),
-        const SizedBox(height: 16),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _completedActivities.length,
-          itemBuilder: (context, index) {
-            final activity = _completedActivities[index];
-            return _buildCompletedActivityCard(activity);
-          },
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildCompletedActivityCard(Activity activity) {
-    final schedule = _schedules.firstWhere(
-      (s) => s.id == activity.scheduleId,
-      orElse: () => Schedule(
-        id: 0,
-        title: 'Unknown Schedule',
-        color: '#000000',
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),
-      ),
-    );
-    
+  Widget _buildEmptyCard(String title, String message, IconData icon) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.all(16),
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Color(int.parse('0xFF${schedule.color.substring(1)}')).withAlpha(30),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.check_circle,
-                color: Color(int.parse('0xFF${schedule.color.substring(1)}')),
-              ),
+            Icon(icon, size: 48, color: Colors.blue),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: AppStyles.heading2,
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.title,
-                    style: AppStyles.bodyLarge.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${activity.startTime} - ${activity.endTime}',
-                    style: AppStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppStyles.bodyLarge,
             ),
           ],
         ),
@@ -780,80 +621,85 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  Widget _buildFloatingActionButton() {
-    if (_currentIndex == 0) {
-      return FloatingActionButton(
-        onPressed: _showAIAssistant,
-        backgroundColor: _aiManager.getServiceColor(_aiManager.preferredService),
-        child: const Icon(Icons.psychology_alt),
-      );
-    } else if (_currentIndex == 1) {
-      return FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddActivityScreen(
-                scheduleId: _selectedSchedule?.id ?? _schedules.first.id!,
-              ),
-            ),
-          );
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add),
-      );
-    } else if (_currentIndex == 2) {
-      return FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddMaterialScreen(),
-            ),
-          );
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add),
-      );
-    }
-    
-    return const SizedBox.shrink();
+  Future<void> _refreshData() async {
+    await _loadData();
   }
   
-  Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: (index) {
-        setState(() {
-          _currentIndex = index;
-        });
+  void _showAddOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.calendar_today),
+                title: const Text('Add Schedule'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AddScheduleScreen(),
+                    ),
+                  );
+                  if (result == true && mounted) {
+                    _loadData();
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.access_time),
+                title: const Text('Add Activity'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (_schedules.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please create a schedule first'),
+                      ),
+                    );
+                    return;
+                  }
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddActivityScreen(
+                        scheduleId: _schedules.first.id!,
+                      ),
+                    ),
+                  );
+                  if (result == true && mounted) {
+                    _loadData();
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.book),
+                title: const Text('Add Study Material'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AddMaterialScreen(),
+                    ),
+                  );
+                  if (result == true && mounted) {
+                    _loadData();
+                  }
+                },
+              ),
+            ],
+          ),
+        );
       },
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.calendar_today),
-          label: 'Schedule',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.book),
-          label: 'Materials',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
     );
   }
   
   void _showAIAssistant() {
     AIAssistantDialog.show(context);
   }
-
-
-
 }

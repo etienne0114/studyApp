@@ -3,10 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:study_scheduler/data/repositories/study_materials_repository.dart';
-// We'll implement a simpler version without third-party dependencies
-// import 'package:image_picker/image_picker.dart';
-// import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:path/path.dart' as path;
 
 class AddMaterialScreen extends StatefulWidget {
   final StudyMaterial? material;
@@ -25,15 +23,16 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _fileUrlController = TextEditingController();
+  final _filePathController = TextEditingController();
   
   final StudyMaterialsRepository _repository = StudyMaterialsRepository();
   
   String _selectedCategory = 'Document';
-  File? _selectedFile;
   String? _filePath;
   String? _fileType;
   bool _isOnline = false;
   bool _isLoading = false;
+  bool _isUrlValid = true;
   
   final List<String> _categories = [
     'Document',
@@ -59,9 +58,13 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
       
       if (widget.material!.fileUrl != null) {
         _fileUrlController.text = widget.material!.fileUrl!;
+        _validateUrl(_fileUrlController.text);
       }
       
       _filePath = widget.material!.filePath;
+      if (_filePath != null) {
+        _filePathController.text = _filePath!;
+      }
       _fileType = widget.material!.fileType;
     }
   }
@@ -71,50 +74,45 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _fileUrlController.dispose();
+    _filePathController.dispose();
     super.dispose();
   }
 
-  // Simplified file picking for demo purposes
-  Future<void> _pickFile() async {
-    try {
-      // Instead of using actual file picker, we'll simulate it
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      setState(() {
-        // Simulate a selected PDF file
-        _selectedFile = null; // We won't have an actual File object
-        _filePath = '/simulated/path/document.pdf';
-        _fileType = 'pdf';
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File selected: document.pdf')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking file: $e')),
-      );
-    }
+  void _handleFilePath(String filePath) {
+    if (filePath.isEmpty) return;
+    
+    setState(() {
+      _filePath = filePath;
+      _fileType = path.extension(filePath).toLowerCase().replaceAll('.', '');
+      _isOnline = false;
+    });
   }
 
-  Future<void> _captureImage() async {
+  void _validateUrl(String url) {
+    final uri = Uri.tryParse(url);
+    setState(() {
+      _isUrlValid = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    });
+  }
+
+  Future<void> _testUrl() async {
+    final url = _fileUrlController.text;
+    if (url.isEmpty) return;
+
     try {
-      // Instead of using actual camera, we'll simulate it
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      setState(() {
-        // Simulate a captured image
-        _selectedFile = null; // We won't have an actual File object
-        _filePath = '/simulated/path/captured_image.jpg';
-        _fileType = 'jpg';
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Image captured successfully')),
-      );
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('URL is valid and accessible')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('URL is not accessible')),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error capturing image: $e')),
+        SnackBar(content: Text('Error testing URL: $e')),
       );
     }
   }
@@ -258,147 +256,7 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            title: const Text('Local File'),
-                            value: false,
-                            groupValue: _isOnline,
-                            onChanged: (value) {
-                              setState(() {
-                                _isOnline = value!;
-                              });
-                            },
-                          ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<bool>(
-                            title: const Text('Online URL'),
-                            value: true,
-                            groupValue: _isOnline,
-                            onChanged: (value) {
-                              setState(() {
-                                _isOnline = value!;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_isOnline) ...[
-                      TextFormField(
-                        controller: _fileUrlController,
-                        decoration: const InputDecoration(
-                          labelText: 'Resource URL',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.link),
-                          hintText: 'https://example.com/resource',
-                        ),
-                        validator: (value) {
-                          if (_isOnline) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter a URL';
-                            }
-                            if (!Uri.parse(value).isAbsolute) {
-                              return 'Please enter a valid URL';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                    ] else ...[
-                      Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                            color: _selectedFile != null || _filePath != null
-                                ? Colors.green
-                                : Colors.grey.withOpacity(0.5),
-                            width: 1,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_selectedFile != null || _filePath != null) ...[
-                                Row(
-                                  children: [
-                                    Icon(
-                                      _getFileIcon(_fileType ?? ''),
-                                      size: 40,
-                                      color: Theme.of(context).primaryColor,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _getFileName() ?? 'Selected File',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          if (_fileType != null)
-                                            Text(
-                                              'File type: ${_fileType!.toUpperCase()}',
-                                              style: TextStyle(
-                                                color: Colors.grey[600],
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedFile = null;
-                                          _filePath = null;
-                                          _fileType = null;
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ] else ...[
-                                const Text(
-                                  'Select a file or capture an image',
-                                  style: TextStyle(
-                                    fontStyle: FontStyle.italic,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: _pickFile,
-                                      icon: const Icon(Icons.upload_file),
-                                      label: const Text('Pick File'),
-                                    ),
-                                    ElevatedButton.icon(
-                                      onPressed: _captureImage,
-                                      icon: const Icon(Icons.camera_alt),
-                                      label: const Text('Capture Image'),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    _buildFileSection(),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -420,13 +278,112 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
     );
   }
 
-  String? _getFileName() {
-    if (_selectedFile != null) {
-      return _selectedFile!.path.split('/').last;
-    } else if (_filePath != null) {
-      return _filePath!.split('/').last;
-    }
-    return null;
+  Widget _buildFileSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'File or URL',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: RadioListTile<bool>(
+                    title: const Text('Local File'),
+                    value: false,
+                    groupValue: _isOnline,
+                    onChanged: (value) {
+                      setState(() {
+                        _isOnline = value!;
+                      });
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: RadioListTile<bool>(
+                    title: const Text('Online URL'),
+                    value: true,
+                    groupValue: _isOnline,
+                    onChanged: (value) {
+                      setState(() {
+                        _isOnline = value!;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (!_isOnline) ...[
+              TextFormField(
+                controller: _filePathController,
+                decoration: const InputDecoration(
+                  labelText: 'File Path',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter the full path to your file',
+                  prefixIcon: Icon(Icons.attach_file),
+                ),
+                onChanged: _handleFilePath,
+                validator: (value) {
+                  if (!_isOnline && (value == null || value.isEmpty)) {
+                    return 'Please enter a file path';
+                  }
+                  return null;
+                },
+              ),
+              if (_filePath != null) ...[
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Icon(
+                    _getFileIcon(_fileType ?? ''),
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  title: Text(
+                    path.basename(_filePath!),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text('Type: ${_fileType?.toUpperCase() ?? 'Unknown'}'),
+                ),
+              ],
+            ] else ...[
+              TextFormField(
+                controller: _fileUrlController,
+                decoration: InputDecoration(
+                  labelText: 'URL',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.link),
+                    onPressed: _testUrl,
+                  ),
+                ),
+                onChanged: _validateUrl,
+                validator: (value) {
+                  if (_isOnline && (value == null || value.isEmpty)) {
+                    return 'Please enter a URL';
+                  }
+                  if (_isOnline && !_isUrlValid) {
+                    return 'Please enter a valid URL';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   IconData _getFileIcon(String fileType) {

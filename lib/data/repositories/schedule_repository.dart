@@ -65,7 +65,8 @@ class ScheduleRepository extends ChangeNotifier {
   }
 
   Future<List<Activity>> getUpcomingActivities() async {
-    final today = DateTime.now().weekday;
+    final dbHelper = DatabaseHelper.instance;
+    final today = DateTime.now();
     return await dbHelper.getUpcomingActivities(today);
   }
 

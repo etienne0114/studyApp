@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:study_scheduler/data/repositories/study_materials_repository.dart';
 import 'dart:async';
-import 'package:study_scheduler/constants/hero_tags.dart';
 
 class CompactAIAssistantDialog extends StatefulWidget {
-  final StudyMaterial? material;
-  final String? heroTag;
-
+  final String? initialQuestion;
+  final String? materialTitle;
+  
   const CompactAIAssistantDialog({
-    super.key, 
-    this.material,
-    this.heroTag,
+    super.key,
+    this.initialQuestion,
+    this.materialTitle, StudyMaterial? material, String? heroTag,
   });
 
   @override
@@ -22,10 +21,10 @@ class CompactAIAssistantDialog extends StatefulWidget {
 
 class _CompactAIAssistantDialogState extends State<CompactAIAssistantDialog> {
   final TextEditingController _questionController = TextEditingController();
-  String _selectedAIService = 'Claude';
-  bool _isProcessing = false;
+  final String _heroTag = 'ai_assistant_${DateTime.now().millisecondsSinceEpoch}';
   String _response = '';
-  late String _heroTag;
+  bool _isProcessing = false;
+  String _selectedAIService = 'GPT-3.5';
   
   // Create repository instance
   final StudyMaterialsRepository _repository = StudyMaterialsRepository();
@@ -36,8 +35,6 @@ class _CompactAIAssistantDialogState extends State<CompactAIAssistantDialog> {
   @override
   void initState() {
     super.initState();
-    // Use provided hero tag or generate a new one
-    _heroTag = widget.heroTag ?? HeroTags.getUniqueCompactAiFabTag();
     // Pre-fill question if applicable
     _loadPreferredService();
   }
@@ -76,7 +73,7 @@ class _CompactAIAssistantDialogState extends State<CompactAIAssistantDialog> {
       
       // Track usage
       await _repository.trackAIUsage(
-        widget.material?.id,
+        null, // No material ID since we're not tracking specific materials
         _selectedAIService,
         question
       );

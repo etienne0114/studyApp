@@ -42,12 +42,65 @@ void main() async {
     ),
   );
   
-  // Initialize services
-  _notificationService = NotificationService.instance;
-  await _notificationService.initialize();
-  
-  // Start the app
-  runApp(const MyApp());
+  try {
+    // Initialize services
+    _databaseHelper = DatabaseHelper.instance;
+    // Initialize database by accessing it
+    await _databaseHelper.database;
+    appLogger.info('Database initialized successfully');
+    
+    _notificationService = NotificationService.instance;
+    await _notificationService.initialize();
+    appLogger.info('Notification service initialized successfully');
+    
+    _materialsRepository = StudyMaterialsRepository();
+    _authService = AuthService();
+    
+    // Initialize AI assistant
+    final aiManager = AIAssistantManager.instance;
+    await aiManager.initialize();
+    appLogger.info('AI assistant initialized successfully');
+    
+    // Start the app
+    runApp(const MyApp());
+  } catch (e, stackTrace) {
+    appLogger.error('Error initializing app: $e\n$stackTrace');
+    // Show error screen
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Error initializing app',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    e.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -60,7 +113,7 @@ class MyApp extends StatelessWidget {
         Provider<DatabaseHelper>.value(value: _databaseHelper),
         Provider<NotificationService>.value(value: _notificationService),
         Provider<StudyMaterialsRepository>.value(value: _materialsRepository),
-        Provider<AuthService>.value(value: _authService),
+        ChangeNotifierProvider<AuthService>.value(value: _authService),
         ChangeNotifierProvider(
           create: (_) => ScheduleRepository(
             dbHelper: _databaseHelper,
@@ -73,57 +126,75 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'Study Scheduler',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primarySwatch: Colors.blue,
           visualDensity: VisualDensity.adaptivePlatformDensity,
+          useMaterial3: true,
         ),
-        home: const HomeScreen(),
+        home: FutureBuilder(
+          future: _initializeApp(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error initializing app',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        snapshot.error.toString(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return const HomeScreen();
+          },
+        ),
       ),
     );
   }
 }
 
-class App extends StatefulWidget {
-  const App({super.key});
-
-  @override
-  State<App> createState() => _AppState();
-}
-
-class _AppState extends State<App> {
-  @override
-  void initState() {
-    super.initState();
-    _initializeServices();
-  }
-
-  Future<void> _initializeServices() async {
-    try {
-      // Initialize core services
-      _databaseHelper = DatabaseHelper.instance;
-      _materialsRepository = StudyMaterialsRepository();
-      _authService = AuthService();
-      
-      // Initialize AI assistant
-      final aiManager = AIAssistantManager.instance;
-      await aiManager.initialize();
-      
-      // App will continue normally even if AI initialization fails
-    } catch (e) {
-      print('Error initializing services: $e');
-      // App will continue normally even if initialization fails
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Study Scheduler',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: const HomeScreen(),
-    );
+Future<void> _initializeApp() async {
+  try {
+    // Initialize database
+    await _databaseHelper.database;
+    appLogger.info('Database initialized successfully');
+    
+    // Initialize notification service
+    await _notificationService.initialize();
+    appLogger.info('Notification service initialized successfully');
+    
+    // Initialize AI assistant
+    final aiManager = AIAssistantManager.instance;
+    await aiManager.initialize();
+    appLogger.info('AI assistant initialized successfully');
+  } catch (e) {
+    appLogger.error('Error initializing app: $e');
+    rethrow;
   }
 }

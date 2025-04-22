@@ -147,7 +147,7 @@ class MockDatabaseHelper extends _i1.Mock implements _i3.DatabaseHelper {
           as _i4.Future<_i6.Activity?>);
 
   @override
-  _i4.Future<List<_i6.Activity>> getUpcomingActivities(int? dayOfWeek) =>
+  _i4.Future<List<_i6.Activity>> getUpcomingActivities([DateTime? dayOfWeek]) =>
       (super.noSuchMethod(
             Invocation.method(#getUpcomingActivities, [dayOfWeek]),
             returnValue: _i4.Future<List<_i6.Activity>>.value(<_i6.Activity>[]),

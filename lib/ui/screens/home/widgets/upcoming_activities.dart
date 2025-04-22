@@ -52,7 +52,7 @@ class UpcomingActivities extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Color(activity.scheduleColor ?? 0xFF2196F3),
+          backgroundColor: activity.scheduleColorAsColor,
           child: Text(
             activity.title[0].toUpperCase(),
             style: const TextStyle(color: Colors.white),

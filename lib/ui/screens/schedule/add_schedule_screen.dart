@@ -1,20 +1,12 @@
 // lib/ui/screens/schedule/add_schedule_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:study_scheduler/constants/app_colors.dart';
+import 'package:study_scheduler/data/database/database_helper.dart';
 import 'package:study_scheduler/data/models/schedule.dart';
-import 'package:study_scheduler/data/repositories/schedule_repository.dart';
-import 'package:study_scheduler/ui/widgets/custom_button.dart';
-import 'package:study_scheduler/ui/widgets/custom_textfield.dart';
+import 'package:study_scheduler/constants/app_colors.dart';
 
 class AddScheduleScreen extends StatefulWidget {
-  final Schedule? schedule; // If provided, we're editing an existing schedule
-
-  const AddScheduleScreen({
-    super.key,
-    this.schedule,
-  });
+  const AddScheduleScreen({super.key});
 
   @override
   State<AddScheduleScreen> createState() => _AddScheduleScreenState();
@@ -24,36 +16,19 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  late int _selectedColorIndex;
-  late bool _isActive;
+  Color _selectedColor = AppColors.primary;
   bool _isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-
-    // If editing, populate fields with existing schedule data
-    if (widget.schedule != null) {
-      _titleController.text = widget.schedule!.title;
-      _descriptionController.text = widget.schedule!.description ?? '';
-
-      // Find the index of the schedule color in our predefined color list
-      _selectedColorIndex = AppColors.scheduleColors.indexWhere(
-        (color) => color.value == widget.schedule!.color,
-      );
-
-      // If color not found in our list, default to the first color
-      if (_selectedColorIndex < 0) {
-        _selectedColorIndex = 0;
-      }
-
-      _isActive = widget.schedule!.isActive == 1;
-    } else {
-      // Default values for new schedule
-      _selectedColorIndex = 0;
-      _isActive = true;
-    }
-  }
+  final List<Color> _colorOptions = [
+    AppColors.primary,
+    Colors.red,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.teal,
+    Colors.pink,
+    Colors.indigo,
+  ];
 
   @override
   void dispose() {
@@ -63,60 +38,51 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
   }
 
   Future<void> _saveSchedule() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      
-      try {
-        final repository =
-            Provider.of<ScheduleRepository>(context, listen: false);
-        final schedule = Schedule(
-          title: _titleController.text,
-          description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-          color: '#${AppColors.scheduleColors[_selectedColorIndex].value.toRadixString(16).substring(2)}',
-          isActive: _isActive ? 1 : 0,
-          createdAt: DateTime.now().toIso8601String(),
-          updatedAt: DateTime.now().toIso8601String(),
-        );
-        
-        if (widget.schedule == null) {
-          await repository.createSchedule(schedule);
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      final schedule = Schedule(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        color: '#${_selectedColor.value.toRadixString(16).substring(2)}',
+        isActive: 1,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final db = DatabaseHelper.instance;
+      final id = await db.insertSchedule(schedule);
+
+      if (mounted) {
+        if (id > 0) {
+          Navigator.pop(context, true);
         } else {
-          await repository.updateSchedule(schedule);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to create schedule')),
+          );
         }
-
-        if (!mounted) return;
-
-        Navigator.pop(context, true); // Return true to indicate success
-      } catch (e) {
-        print('Error saving schedule: $e');
-
-        if (!mounted) return;
-
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An error occurred. Please try again.')),
+          SnackBar(content: Text('Error creating schedule: $e')),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.schedule != null;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Schedule' : 'Create Schedule'),
-        actions: [
-          if (isEditing)
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: _confirmDelete,
-            ),
-        ],
+        title: const Text('Create Schedule'),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -127,176 +93,99 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title field
-                    CustomTextField(
+                    TextFormField(
                       controller: _titleController,
-                      label: 'Title',
-                      hint: 'Enter schedule title',
+                      decoration: const InputDecoration(
+                        labelText: 'Schedule Title',
+                        hintText: 'e.g., Study Plan, Work Schedule',
+                      ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
+                        if (value == null || value.trim().isEmpty) {
                           return 'Please enter a title';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
-
-                    // Description field
-                    CustomTextField(
+                    TextFormField(
                       controller: _descriptionController,
-                      label: 'Description (Optional)',
-                      hint: 'Enter schedule description',
+                      decoration: const InputDecoration(
+                        labelText: 'Description (Optional)',
+                        hintText: 'Add some details about this schedule',
+                      ),
                       maxLines: 3,
                     ),
                     const SizedBox(height: 24),
-
-                    // Color selection
                     const Text(
-                      'Color',
+                      'Schedule Color',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    _buildColorSelector(),
-                    const SizedBox(height: 24),
-
-                    // Active toggle
-                    SwitchListTile(
-                      title: const Text('Active'),
-                      subtitle: const Text('Enable or disable this schedule'),
-                      value: _isActive,
-                      activeColor:
-                          AppColors.scheduleColors[_selectedColorIndex],
-                      onChanged: (value) {
-                        setState(() {
-                          _isActive = value;
-                        });
-                      },
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _colorOptions.map((color) {
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedColor = color);
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _selectedColor == color
+                                    ? Colors.white
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                              boxShadow: [
+                                if (_selectedColor == color)
+                                  BoxShadow(
+                                    color: color.withOpacity(0.4),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                              ],
+                            ),
+                            child: _selectedColor == color
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                        );
+                      }).toList(),
                     ),
                     const SizedBox(height: 32),
-
-                    // Save button
-                    CustomButton(
-                      text: isEditing ? 'Update Schedule' : 'Create Schedule',
-                      onPressed: _saveSchedule,
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _saveSchedule,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _selectedColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Create Schedule',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
     );
-  }
-
-  Widget _buildColorSelector() {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: List.generate(
-        AppColors.scheduleColors.length,
-        (index) => GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedColorIndex = index;
-            });
-          },
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.scheduleColors[index],
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: _selectedColorIndex == index
-                    ? Colors.black
-                    : Colors.transparent,
-                width: 3,
-              ),
-              boxShadow: [
-                if (_selectedColorIndex == index)
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 4,
-                    spreadRadius: 1,
-                  ),
-              ],
-            ),
-            child: _selectedColorIndex == index
-                ? const Icon(
-                    Icons.check,
-                    color: Colors.white,
-                  )
-                : null,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _confirmDelete() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Schedule'),
-        content: const Text(
-          'Are you sure you want to delete this schedule? This will also delete all activities associated with this schedule.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _deleteSchedule,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _deleteSchedule() async {
-    if (widget.schedule == null || widget.schedule!.id == null) {
-      Navigator.pop(context); // Close dialog
-      return;
-    }
-
-    Navigator.pop(context); // Close dialog
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final repository =
-          Provider.of<ScheduleRepository>(context, listen: false);
-      final success = await repository.deleteSchedule(widget.schedule!.id!);
-
-      if (!mounted) return;
-
-      if (success) {
-        Navigator.pop(context, true); // Return to previous screen
-      } else {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error deleting schedule: $e');
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('An error occurred. Please try again.')),
-      );
-
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 }
