@@ -407,23 +407,65 @@ class DatabaseHelper {
     try {
       final db = await database;
       final now = fromDate ?? DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day).toIso8601String();
       
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
         SELECT a.*, s.title as scheduleTitle, s.color as scheduleColor
         FROM activities a
-        JOIN schedules s ON a.scheduleId = s.id
-        WHERE a.startTime >= ?
+        LEFT JOIN schedules s ON a.scheduleId = s.id
+        WHERE a.dayOfWeek = ?
         AND (a.isCompleted IS NULL OR a.isCompleted = 0)
-        ORDER BY a.startTime ASC
-      ''', [startOfDay]);
+        ORDER BY 
+          CASE 
+            WHEN time(a.startTime) < time('now', 'localtime') THEN 1 
+            ELSE 0 
+          END,
+          time(a.startTime) ASC
+      ''', [now.weekday]);
       
       _logger.info('Retrieved ${maps.length} upcoming activities');
+      
       return List.generate(maps.length, (i) {
-        final activity = Activity.fromMap(maps[i]);
-        activity.scheduleTitle = maps[i]['scheduleTitle'] as String;
-        activity.scheduleColor = maps[i]['scheduleColor'] as String;
-        return activity;
+        final map = maps[i];
+        try {
+          return Activity(
+            id: map['id'] as int?,
+            scheduleId: map['scheduleId'] as int? ?? 0,
+            title: map['title']?.toString() ?? 'Untitled Activity',
+            description: map['description']?.toString(),
+            category: map['category']?.toString() ?? 'study',
+            type: map['type']?.toString() ?? 'study',
+            startTime: TimeOfDay(
+              hour: int.tryParse(map['startTime']?.toString().split(':')[0] ?? '0') ?? 0,
+              minute: int.tryParse(map['startTime']?.toString().split(':')[1] ?? '0') ?? 0,
+            ),
+            endTime: TimeOfDay(
+              hour: int.tryParse(map['endTime']?.toString().split(':')[0] ?? '0') ?? 0,
+              minute: int.tryParse(map['endTime']?.toString().split(':')[1] ?? '0') ?? 0,
+            ),
+            isCompleted: (map['isCompleted'] as int?) == 1,
+            notificationEnabled: (map['notificationEnabled'] as int?) == 1,
+            notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
+            location: map['location']?.toString(),
+            dayOfWeek: (map['dayOfWeek'] as int?) ?? now.weekday,
+            isRecurring: (map['isRecurring'] as int?) == 1,
+            notifyBefore: (map['notifyBefore'] as int?) ?? 30,
+            createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+            updatedAt: map['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
+            scheduleTitle: map['scheduleTitle']?.toString(),
+            scheduleColor: map['scheduleColor']?.toString() ?? '#2196F3',
+          );
+        } catch (e) {
+          _logger.error('Error creating activity from map: $e');
+          return Activity(
+            scheduleId: map['scheduleId'] as int? ?? 0,
+            title: 'Error Loading Activity',
+            category: 'error',
+            startTime: TimeOfDay(hour: 0, minute: 0),
+            endTime: TimeOfDay(hour: 0, minute: 0),
+            dayOfWeek: now.weekday,
+            type: 'error',
+          );
+        }
       });
     } catch (e) {
       _logger.error('Error getting upcoming activities: $e');
