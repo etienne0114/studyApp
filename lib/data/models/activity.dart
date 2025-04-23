@@ -81,7 +81,7 @@ class Activity {
       type: type ?? this.type,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
-      isCompleted: isCompleted ?? this._isCompleted,
+      isCompleted: isCompleted ?? _isCompleted,
       notificationEnabled: notificationEnabled ?? this.notificationEnabled,
       notificationMinutesBefore: notificationMinutesBefore ?? this.notificationMinutesBefore,
       location: location ?? this.location,
