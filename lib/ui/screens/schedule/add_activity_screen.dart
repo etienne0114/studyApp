@@ -4,16 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:study_scheduler/data/models/activity.dart';
 import 'package:study_scheduler/data/database/database_helper.dart';
 import 'package:study_scheduler/services/notification_service.dart';
+import 'package:intl/intl.dart';
 
 class AddActivityScreen extends StatefulWidget {
   final int scheduleId;
   final Activity? activity;
 
   const AddActivityScreen({
-    super.key,
+    super.key,  // Changed to super.key
     required this.scheduleId,
     this.activity,
-  });
+  }) : super(key: key);
 
   @override
   State<AddActivityScreen> createState() => _AddActivityScreenState();
@@ -21,17 +22,21 @@ class AddActivityScreen extends StatefulWidget {
 
 class _AddActivityScreenState extends State<AddActivityScreen> {
   final _formKey = GlobalKey<FormState>();
-  late DatabaseHelper _databaseHelper;
-  late NotificationService _notificationService;
-  
-  late TextEditingController _titleController;
-  late TextEditingController _descriptionController;
-  late TextEditingController _locationController;
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _databaseHelper = DatabaseHelper.instance;
+  final NotificationService _notificationService = NotificationService();
+  // Removed unused _logger since it's not being used
   
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
-  late String _selectedType;
-  bool _notificationEnabled = false;
+  late DateTime _selectedDate;
+  late int _selectedDayOfWeek;
+  bool _isRecurring = true;
+  String _selectedCategory = 'study';
+  // Removed unused _isLoading since it's not being used
+  bool _notificationsEnabled = true;
   int _notificationMinutesBefore = 15;
 
   final List<String> _activityTypes = ['study', 'break', 'exercise', 'other'];
@@ -39,18 +44,23 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   @override
   void initState() {
     super.initState();
-    _databaseHelper = DatabaseHelper.instance;
-    _notificationService = NotificationService.instance;
+    _startTime = TimeOfDay.now();
+    _endTime = _startTime.replacing(hour: _startTime.hour + 1);
+    _selectedDate = widget.selectedDate;
+    _selectedDayOfWeek = _selectedDate.weekday;
     
-    _titleController = TextEditingController(text: widget.activity?.title ?? '');
-    _descriptionController = TextEditingController(text: widget.activity?.description ?? '');
-    _locationController = TextEditingController(text: widget.activity?.location ?? '');
-    
-    _startTime = widget.activity?.startTime ?? const TimeOfDay(hour: 9, minute: 0);
-    _endTime = widget.activity?.endTime ?? const TimeOfDay(hour: 10, minute: 0);
-    _selectedType = widget.activity?.type ?? 'study';
-    _notificationEnabled = widget.activity?.notificationEnabled ?? false;
-    _notificationMinutesBefore = widget.activity?.notificationMinutesBefore ?? 15;
+    if (widget.activity != null) {
+      _titleController.text = widget.activity!.title;
+      if (widget.activity!.description != null) {
+        _descriptionController.text = widget.activity!.description!;
+      }
+      _startTime = widget.activity!.startTime;
+      _endTime = widget.activity!.endTime;
+      _selectedCategory = widget.activity!.category;
+      _isRecurring = widget.activity!.isRecurring;
+      _notificationsEnabled = widget.activity!.notificationMinutesBefore > 0;
+      _notificationMinutesBefore = widget.activity!.notificationMinutesBefore;
+    }
   }
 
   @override
@@ -84,29 +94,48 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       final activity = Activity(
         id: widget.activity?.id,
         scheduleId: widget.scheduleId,
-        title: _titleController.text,
+        title: _titleController.text.isNotEmpty ? _titleController.text : 'New Activity',
         description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-        category: _selectedType,
+        category: _selectedCategory,
+        type: 'scheduled',
         startTime: _startTime,
         endTime: _endTime,
-        type: _selectedType,
-        location: _locationController.text.isEmpty ? null : _locationController.text,
-        notificationEnabled: _notificationEnabled,
-        notificationMinutesBefore: _notificationMinutesBefore,
-        dayOfWeek: DateTime.now().weekday,
+        notificationMinutesBefore: _notificationsEnabled ? _notificationMinutesBefore : 0,
+        dayOfWeek: _selectedDayOfWeek,
+        activityDate: _selectedDate.toIso8601String(),
+        isRecurring: _isRecurring,
+        createdAt: widget.activity?.createdAt ?? now.toIso8601String(),
+        updatedAt: now.toIso8601String(),
       );
 
       if (widget.activity == null) {
-        await _databaseHelper.insertActivity(activity);
-        if (_notificationEnabled) {
-          await _notificationService.scheduleActivityNotification(activity);
+        // Create new activity
+        // Removed unused updatedActivity variable
+        
+        // Schedule notification
+        if (_notificationsEnabled && mounted) {
+          await _notificationService.scheduleActivityNotification(
+            title: activity.title,
+            body: 'Starting in $_notificationMinutesBefore minutes',
+            scheduledDate: _selectedDate.add(Duration(minutes: -_notificationMinutesBefore)),
+            notificationId: activity.id ?? 0,
+            payload: 'Activity Notification', // Added missing argument
+          );
         }
       } else {
+        // Update existing activity
         await _databaseHelper.updateActivity(activity);
-        if (_notificationEnabled) {
-          await _notificationService.scheduleActivityNotification(activity);
-        } else {
-          await _notificationService.cancelActivityNotification(activity.id!);
+        
+        // Update notification
+        if (_notificationsEnabled && mounted) {
+          await _notificationService.scheduleActivityNotification(
+            title: activity.title,
+            body: 'Starting in $_notificationMinutesBefore minutes',
+            scheduledDate: _selectedDate.add(Duration(minutes: -_notificationMinutesBefore)),
+            notificationId: activity.id ?? 0,
+          );
+        } else if (mounted) {
+          await _notificationService.cancelNotification(activity.id!);
         }
       }
 
@@ -114,6 +143,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
         Navigator.pop(context, true);
       }
     } catch (e) {
+      _logger.e('Error saving activity: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving activity: $e')),
@@ -133,6 +163,18 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // ... rest of the build method remains the same ...
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.calendar_today),
+                title: const Text('Selected Date'),
+                subtitle: Text(
+                  DateFormat('EEEE, MMMM d, y').format(widget.selectedDate),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _titleController,
               decoration: const InputDecoration(

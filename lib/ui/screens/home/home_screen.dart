@@ -318,6 +318,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
+  void _editActivity(Activity activity) async {
+    final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+        builder: (context) => AddActivityScreen(
+          scheduleId: activity.scheduleId,
+          activity: activity,
+          selectedDate: DateTime.now().subtract(
+            Duration(days: DateTime.now().weekday - activity.dayOfWeek),
+          ),
+          initialDayOfWeek: activity.dayOfWeek,
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      _loadData();
+    }
+  }
+  
   Widget _buildCompletedActivitiesSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,43 +351,95 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            if (_completedActivities.isNotEmpty)
+              TextButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Clear All Completed'),
+                      content: const Text('Are you sure you want to delete all completed activities?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+            ),
             TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/activities'),
-              child: const Text('View All'),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Delete All'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true && mounted) {
+                    await DatabaseHelper.instance.deleteAllCompletedActivities();
+                    _loadData();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('All completed activities deleted'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.delete_sweep),
+                label: const Text('Clear All'),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        FutureBuilder<List<Activity>>(
-          future: _getCompletedActivities(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            
-            if (snapshot.hasError) {
-              return Center(
-                child: Text('Error: ${snapshot.error}'),
-              );
-            }
-            
-            final activities = snapshot.data ?? [];
-            
-            if (activities.isEmpty) {
-              return _buildEmptyCard(
-                'No completed activities today',
-                'Complete some activities to see them here',
-                Icons.check_circle,
-              );
-            }
-            
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: activities.length > 3 ? 3 : activities.length,
-              itemBuilder: (context, index) {
-                final activity = activities[index];
-                return Card(
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_completedActivities.isEmpty)
+          _buildEmptyCard(
+            'No completed activities',
+            'Complete some activities to see them here',
+            Icons.check_circle,
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _completedActivities.length,
+                  itemBuilder: (context, index) {
+              final activity = _completedActivities[index];
+              return Dismissible(
+                key: Key('completed_activity_${activity.id}'),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20.0),
+                  color: Colors.red,
+                  child: const Icon(
+                    Icons.delete,
+                    color: Colors.white,
+                  ),
+                ),
+                onDismissed: (direction) async {
+                  if (activity.id != null) {
+                    await DatabaseHelper.instance.deleteCompletedActivity(activity.id!);
+                    setState(() {
+                      _completedActivities.removeAt(index);
+                    });
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${activity.title} deleted'),
+                          action: SnackBarAction(
+                            label: 'Undo',
+                            onPressed: () {
+                              _loadData(); // Reload all data to restore the activity
+                            },
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     leading: CircleAvatar(
@@ -378,22 +449,59 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: const TextStyle(color: Colors.white),
                       ),
                     ),
-                    title: Text(activity.title),
-                    subtitle: Text(
-                      '${activity.startTime.format(context)} - ${activity.endTime.format(context)}',
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            activity.title,
+                            style: const TextStyle(
+                              decoration: TextDecoration.lineThrough,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.green, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'Completed',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    trailing: const Icon(Icons.check_circle, color: Colors.green),
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      '/activity-details',
-                      arguments: activity,
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${activity.startTime.format(context)} - ${activity.endTime.format(context)}',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        Text(
+                          'Completed on ${activity.activityDate}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            );
-          },
-        ),
+                ),
+              );
+            },
+              ),
       ],
     );
   }
@@ -668,10 +776,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(
                       builder: (context) => AddActivityScreen(
                         scheduleId: _schedules.first.id!,
-                      ),
-                    ),
-                  );
-                  if (result == true && mounted) {
+                        selectedDate: now,
+                        initialDayOfWeek: now.weekday,
+              ),
+            ),
+          );
+                  if (result == true) {
                     _loadData();
                   }
                 },

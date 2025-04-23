@@ -9,6 +9,7 @@ import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:flutter/foundation.dart'; // Add this import for kDebugMode
 import 'package:study_scheduler/data/helpers/logger.dart';
 import 'package:flutter/material.dart'; // Add this import for TimeOfDay
+import 'package:intl/intl.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -136,8 +137,30 @@ class DatabaseHelper {
         )
       ''');
 
-      // Create activities table
-      await _createActivitiesTable(db);
+      // Create activities table with all required fields
+    await db.execute('''
+        CREATE TABLE IF NOT EXISTS activities(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scheduleId INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+          category TEXT NOT NULL DEFAULT 'study',
+          type TEXT NOT NULL DEFAULT 'study',
+        startTime TEXT NOT NULL,
+        endTime TEXT NOT NULL,
+        isCompleted INTEGER DEFAULT 0,
+        notificationEnabled INTEGER DEFAULT 1,
+        notificationMinutesBefore INTEGER DEFAULT 15,
+          location TEXT,
+          dayOfWeek INTEGER NOT NULL,
+          activityDate TEXT NOT NULL,
+          isRecurring INTEGER DEFAULT 1,
+          notifyBefore INTEGER DEFAULT 30,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (scheduleId) REFERENCES schedules (id) ON DELETE CASCADE
+      )
+    ''');
 
       // Create study materials table
       await db.execute('''
@@ -448,11 +471,50 @@ class DatabaseHelper {
       ''', [startOfDay, endOfDay]);
       
       _logger.info('Retrieved ${maps.length} completed activities');
-      return List.generate(maps.length, (i) {
-        final activity = Activity.fromMap(maps[i]);
-        activity.scheduleTitle = maps[i]['scheduleTitle'] as String;
-        activity.scheduleColor = maps[i]['scheduleColor'] as String;
-        return activity;
+    return List.generate(maps.length, (i) {
+        final map = maps[i];
+        try {
+          return Activity(
+            id: map['id'] as int?,
+            scheduleId: map['scheduleId'] as int? ?? 0,
+            title: map['title']?.toString() ?? 'Untitled Activity',
+            description: map['description']?.toString(),
+            category: map['category']?.toString() ?? 'study',
+            type: map['type']?.toString() ?? 'study',
+            startTime: TimeOfDay(
+              hour: int.tryParse(map['startTime']?.toString().split(':')[0] ?? '0') ?? 0,
+              minute: int.tryParse(map['startTime']?.toString().split(':')[1] ?? '0') ?? 0,
+            ),
+            endTime: TimeOfDay(
+              hour: int.tryParse(map['endTime']?.toString().split(':')[0] ?? '0') ?? 0,
+              minute: int.tryParse(map['endTime']?.toString().split(':')[1] ?? '0') ?? 0,
+            ),
+            isCompleted: true,
+            notificationEnabled: (map['notificationEnabled'] as int?) == 1,
+            notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
+            location: map['location']?.toString(),
+            dayOfWeek: (map['dayOfWeek'] as int?) ?? DateTime.now().weekday,
+            activityDate: map['activityDate']?.toString() ?? DateTime.now().toIso8601String().split('T')[0],
+            isRecurring: (map['isRecurring'] as int?) == 1,
+            notifyBefore: (map['notifyBefore'] as int?) ?? 30,
+            createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+            updatedAt: map['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
+            scheduleTitle: map['scheduleTitle']?.toString(),
+            scheduleColor: map['scheduleColor']?.toString() ?? '#2196F3',
+          );
+        } catch (e) {
+          _logger.error('Error creating completed activity from map: $e');
+          return Activity(
+            scheduleId: map['scheduleId'] as int? ?? 0,
+            title: 'Error Loading Activity',
+            category: 'error',
+            startTime: TimeOfDay(hour: 0, minute: 0),
+            endTime: TimeOfDay(hour: 0, minute: 0),
+            dayOfWeek: DateTime.now().weekday,
+            type: 'error',
+            activityDate: DateTime.now().toIso8601String().split('T')[0],
+          );
+        }
       });
     } catch (e) {
       _logger.error('Error getting completed activities: $e');
@@ -479,14 +541,76 @@ class DatabaseHelper {
 
   Future<int> insertActivity(Activity activity) async {
     try {
-      final db = await database;
-      final now = DateTime.now();
+      _logger.info('Inserting activity: ${activity.title}');
+    final db = await database;
       
-      final map = activity.toMap();
-      map['createdAt'] = now.toIso8601String();
-      map['updatedAt'] = now.toIso8601String();
+      // Ensure we have a valid activity date
+      if (activity.activityDate.isEmpty) {
+        throw Exception('Activity date cannot be null or empty');
+      }
       
-      return await db.insert('activities', map);
+      // Convert activity to map
+      final Map<String, dynamic> activityMap = {
+        'scheduleId': activity.scheduleId,
+        'title': activity.title,
+        'description': activity.description,
+        'category': activity.category,
+        'type': activity.type,
+        'startTime': '${activity.startTime.hour.toString().padLeft(2, '0')}:${activity.startTime.minute.toString().padLeft(2, '0')}',
+        'endTime': '${activity.endTime.hour.toString().padLeft(2, '0')}:${activity.endTime.minute.toString().padLeft(2, '0')}',
+        'isCompleted': activity.isCompleted ? 1 : 0,
+        'notificationEnabled': activity.notificationEnabled ? 1 : 0,
+        'notificationMinutesBefore': activity.notificationMinutesBefore,
+        'location': activity.location,
+        'dayOfWeek': activity.dayOfWeek,
+        'activityDate': activity.activityDate,  // Use the specific date
+        'isRecurring': activity.isRecurring ? 1 : 0,
+        'notifyBefore': activity.notifyBefore,
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      
+      // Remove id if it's 0 or null to let SQLite auto-increment
+      if (activity.id == null || activity.id == 0) {
+        activityMap.remove('id');
+      } else {
+        activityMap['id'] = activity.id;
+      }
+      
+      _logger.info('Inserting activity with data: $activityMap');
+      
+      // Check if an activity already exists for this date and time slot
+      final List<Map<String, dynamic>> existing = await db.query(
+        'activities',
+        where: 'activityDate = ? AND startTime = ? AND endTime = ? AND scheduleId = ?',
+        whereArgs: [
+          activity.activityDate,
+          activityMap['startTime'],
+          activityMap['endTime'],
+          activity.scheduleId
+        ],
+      );
+      
+      if (existing.isNotEmpty) {
+        _logger.info('Activity already exists for this date and time slot. Updating instead.');
+        final existingId = existing.first['id'] as int;
+        return await db.update(
+          'activities',
+          activityMap,
+          where: 'id = ?',
+          whereArgs: [existingId],
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      
+      final id = await db.insert(
+        'activities',
+        activityMap,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      
+      _logger.info('Activity inserted with id: $id');
+      return id;
     } catch (e) {
       _logger.error('Error inserting activity: $e');
       rethrow;
@@ -825,6 +949,82 @@ class DatabaseHelper {
     } catch (e) {
       _logger.error('Error resetting database: $e');
       rethrow;
+    }
+  }
+  
+  Future<List<Activity>> getActivitiesForMonth(DateTime startDate, DateTime endDate) async {
+    try {
+      _logger.info('Getting activities for month range: ${startDate.toString()} to ${endDate.toString()}');
+      final db = await database;
+      
+      // Format dates for SQLite in yyyy-MM-dd format
+      final startDateStr = startDate.toIso8601String().split('T')[0];
+      final endDateStr = endDate.toIso8601String().split('T')[0];
+    
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+        SELECT DISTINCT
+          a.*,
+          s.title as scheduleTitle,
+          s.color as scheduleColor
+        FROM activities a
+        LEFT JOIN schedules s ON a.scheduleId = s.id
+        WHERE date(a.activityDate) BETWEEN date(?) AND date(?)
+        AND (a.isCompleted IS NULL OR a.isCompleted = 0)
+        ORDER BY a.activityDate, a.startTime
+      ''', [startDateStr, endDateStr]);
+      
+      _logger.info('Retrieved ${maps.length} activities for month range');
+      
+      return List.generate(maps.length, (i) {
+        final map = maps[i];
+        try {
+          final activityDate = map['activityDate']?.toString() ?? startDateStr;
+          
+          return Activity(
+            id: map['id'] as int?,
+            scheduleId: map['scheduleId'] as int? ?? 0,
+            title: map['title']?.toString() ?? 'Untitled Activity',
+            description: map['description']?.toString(),
+            category: map['category']?.toString() ?? 'study',
+            type: map['type']?.toString() ?? 'study',
+            startTime: TimeOfDay(
+              hour: int.tryParse(map['startTime']?.toString().split(':')[0] ?? '0') ?? 0,
+              minute: int.tryParse(map['startTime']?.toString().split(':')[1] ?? '0') ?? 0,
+            ),
+            endTime: TimeOfDay(
+              hour: int.tryParse(map['endTime']?.toString().split(':')[0] ?? '0') ?? 0,
+              minute: int.tryParse(map['endTime']?.toString().split(':')[1] ?? '0') ?? 0,
+            ),
+            isCompleted: (map['isCompleted'] as int?) == 1,
+            notificationEnabled: (map['notificationEnabled'] as int?) == 1,
+            notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
+            location: map['location']?.toString(),
+            dayOfWeek: (map['dayOfWeek'] as int?) ?? startDate.weekday,
+            activityDate: activityDate,
+            isRecurring: (map['isRecurring'] as int?) == 1,
+            notifyBefore: (map['notifyBefore'] as int?) ?? 30,
+            createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+            updatedAt: map['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
+            scheduleTitle: map['scheduleTitle']?.toString(),
+            scheduleColor: map['scheduleColor']?.toString() ?? '#2196F3',
+          );
+        } catch (e) {
+          _logger.error('Error creating activity from map: $e');
+          return Activity(
+            scheduleId: map['scheduleId'] as int? ?? 0,
+            title: 'Error Loading Activity',
+            category: 'error',
+            startTime: TimeOfDay(hour: 0, minute: 0),
+            endTime: TimeOfDay(hour: 0, minute: 0),
+            dayOfWeek: startDate.weekday,
+            type: 'error',
+            activityDate: startDateStr,
+          );
+        }
+      });
+    } catch (e) {
+      _logger.error('Error getting activities for month: $e');
+      return [];
     }
   }
 }
