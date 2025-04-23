@@ -57,10 +57,15 @@ class _ScheduleDetailScreenState extends State<ScheduleDetailScreen> {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () async {
+              final now = DateTime.now();
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AddActivityScreen(scheduleId: widget.schedule.id!),
+                  builder: (context) => AddActivityScreen(
+                    scheduleId: widget.schedule.id!,
+                    selectedDate: now,
+                    initialDayOfWeek: now.weekday,
+                  ),
                 ),
               );
               if (result == true) {
@@ -86,10 +91,15 @@ class _ScheduleDetailScreenState extends State<ScheduleDetailScreen> {
                       const SizedBox(height: 8),
                       ElevatedButton(
                         onPressed: () async {
+                          final now = DateTime.now();
                           final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => AddActivityScreen(scheduleId: widget.schedule.id!),
+                              builder: (context) => AddActivityScreen(
+                                scheduleId: widget.schedule.id!,
+                                selectedDate: now,
+                                initialDayOfWeek: now.weekday,
+                              ),
                             ),
                           );
                           if (result == true) {
@@ -120,6 +130,10 @@ class _ScheduleDetailScreenState extends State<ScheduleDetailScreen> {
                               builder: (context) => AddActivityScreen(
                                 scheduleId: widget.schedule.id!,
                                 activity: activity,
+                                selectedDate: DateTime.now().subtract(
+                                  Duration(days: DateTime.now().weekday - activity.dayOfWeek),
+                                ),
+                                initialDayOfWeek: activity.dayOfWeek,
                               ),
                             ),
                           );

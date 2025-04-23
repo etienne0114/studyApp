@@ -5,7 +5,6 @@ import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:study_scheduler/helpers/ai_helper.dart';
 import 'package:study_scheduler/ui/screens/materials/add_material_screen.dart';
 import 'package:study_scheduler/data/repositories/study_materials_repository.dart';
-import 'package:study_scheduler/utils/logger.dart';
 
 class MaterialDetailScreen extends StatefulWidget {
   final StudyMaterial material;
@@ -22,8 +21,6 @@ class MaterialDetailScreen extends StatefulWidget {
 class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   final StudyMaterialsRepository _repository = StudyMaterialsRepository();
   late StudyMaterial _material;
-  bool _isLoading = true;
-  final _logger = Logger();
   
   @override
   void initState() {
@@ -83,18 +80,15 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   Future<void> _loadMaterial() async {
     if (_material.id == null) return;
     
-    setState(() => _isLoading = true);
     try {
       final updatedMaterial = await _repository.getMaterialById(_material.id!);
       if (updatedMaterial != null && mounted) {
         setState(() {
           _material = updatedMaterial;
-          _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading material: $e')),
         );

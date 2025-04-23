@@ -1,6 +1,7 @@
 // lib/data/models/activity.dart
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class Activity {
   final int? id;
@@ -16,6 +17,7 @@ class Activity {
   final int notificationMinutesBefore;
   final String? location;
   final int dayOfWeek;
+  final String activityDate;
   final bool isRecurring;
   final int notifyBefore;
   final String createdAt;
@@ -40,6 +42,7 @@ class Activity {
     this.notificationMinutesBefore = 15,
     this.location,
     required this.dayOfWeek,
+    String? activityDate,
     this.isRecurring = true,
     this.notifyBefore = 30,
     String? createdAt,
@@ -48,6 +51,7 @@ class Activity {
     this.scheduleColor,
   }) : 
     _isCompleted = isCompleted,
+    activityDate = activityDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now()),
     createdAt = createdAt ?? DateTime.now().toIso8601String(),
     updatedAt = updatedAt ?? DateTime.now().toIso8601String();
 
@@ -109,6 +113,7 @@ class Activity {
       'notificationMinutesBefore': notificationMinutesBefore,
       'location': location,
       'dayOfWeek': dayOfWeek,
+      'activityDate': activityDate,
       'isRecurring': isRecurring ? 1 : 0,
       'notifyBefore': notifyBefore,
       'createdAt': createdAt,
@@ -143,6 +148,7 @@ class Activity {
       notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
       location: map['location'] as String?,
       dayOfWeek: (map['dayOfWeek'] as int?) ?? DateTime.now().weekday,
+      activityDate: map['activityDate']?.toString() ?? DateFormat('yyyy-MM-dd').format(DateTime.now()),
       isRecurring: (map['isRecurring'] as int?) == 1,
       notifyBefore: (map['notifyBefore'] as int?) ?? 30,
       createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
