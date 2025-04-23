@@ -318,28 +318,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-<<<<<<< HEAD
-=======
-  void _editActivity(Activity activity) async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddActivityScreen(
-          scheduleId: activity.scheduleId,
-          activity: activity,
-          selectedDate: DateTime.now().subtract(
-            Duration(days: DateTime.now().weekday - activity.dayOfWeek),
-          ),
-          initialDayOfWeek: activity.dayOfWeek,
-        ),
-      ),
-    );
-    if (result == true && mounted) {
-      _loadData();
-    }
-  }
-  
->>>>>>> parent of f1a0110 (errors 2)
   Widget _buildCompletedActivitiesSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,7 +332,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-<<<<<<< HEAD
             TextButton(
               onPressed: () => Navigator.pushNamed(context, '/activities'),
               child: const Text('View All'),
@@ -392,97 +369,6 @@ class _HomeScreenState extends State<HomeScreen> {
               itemBuilder: (context, index) {
                 final activity = activities[index];
                 return Card(
-=======
-            if (_completedActivities.isNotEmpty)
-              TextButton.icon(
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Clear All Completed'),
-                      content: const Text('Are you sure you want to delete all completed activities?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Delete All'),
-                        ),
-                      ],
-                    ),
-                  );
-
-                  if (confirmed == true && mounted) {
-                    await DatabaseHelper.instance.deleteAllCompletedActivities();
-                    _loadData();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('All completed activities deleted'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  }
-                },
-                icon: const Icon(Icons.delete_sweep),
-                label: const Text('Clear All'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_isLoading)
-          const Center(child: CircularProgressIndicator())
-        else if (_completedActivities.isEmpty)
-          _buildEmptyCard(
-            'No completed activities',
-            'Complete some activities to see them here',
-            Icons.check_circle,
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _completedActivities.length,
-            itemBuilder: (context, index) {
-              final activity = _completedActivities[index];
-              return Dismissible(
-                key: Key('completed_activity_${activity.id}'),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20.0),
-                  color: Colors.red,
-                  child: const Icon(
-                    Icons.delete,
-                    color: Colors.white,
-                  ),
-                ),
-                onDismissed: (direction) async {
-                  if (activity.id != null) {
-                    await DatabaseHelper.instance.deleteCompletedActivity(activity.id!);
-                    setState(() {
-                      _completedActivities.removeAt(index);
-                    });
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${activity.title} deleted'),
-                          action: SnackBarAction(
-                            label: 'Undo',
-                            onPressed: () {
-                              _loadData(); // Reload all data to restore the activity
-                            },
-                          ),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: Card(
->>>>>>> parent of f1a0110 (errors 2)
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     leading: CircleAvatar(
@@ -503,18 +389,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       arguments: activity,
                     ),
                   ),
-<<<<<<< HEAD
                 );
               },
             );
           },
         ),
-=======
-                ),
-              );
-            },
-          ),
->>>>>>> parent of f1a0110 (errors 2)
       ],
     );
   }
@@ -789,19 +668,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(
                       builder: (context) => AddActivityScreen(
                         scheduleId: _schedules.first.id!,
-<<<<<<< HEAD
                       ),
                     ),
                   );
                   if (result == true && mounted) {
-=======
-                        selectedDate: now,
-                        initialDayOfWeek: now.weekday,
-                      ),
-                    ),
-                  );
-                  if (result == true) {
->>>>>>> parent of f1a0110 (errors 2)
                     _loadData();
                   }
                 },
