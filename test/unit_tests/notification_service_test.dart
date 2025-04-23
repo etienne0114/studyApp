@@ -24,11 +24,11 @@ void main() {
         notifyBefore: 0, // Should cause early return
         category: 'General',
         type: 'Reminder',
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(), // Fixed issue
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(), // Fixed issue
       );
 
-      expect(() => service.scheduleActivityNotification(activity, notificationId: 1, title: '', body: '', scheduledDate: DateTime.now()), returnsNormally);
+      expect(() => service.scheduleActivityNotification(activity), returnsNormally);
     });
 
     test('should not schedule notification if activity ID is null', () {
@@ -43,11 +43,11 @@ void main() {
         notifyBefore: 30,
         category: 'General',
         type: 'Reminder',
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(), // Fixed issue
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(), // Fixed issue
       );
 
-      expect(() => service.scheduleActivityNotification(activity, notificationId: 0, title: '', body: '', scheduledDate: DateTime.now()), returnsNormally);
+      expect(() => service.scheduleActivityNotification(activity), returnsNormally);
     });
 
   });

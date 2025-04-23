@@ -122,17 +122,7 @@ class ScheduleRepository extends ChangeNotifier {
     if (activity.id == null) return;
     
     try {
-      // Single notification call with all required parameters
-      await notificationService.scheduleActivityNotification(
-        id: activity.id!,
-        notificationId: activity.id!, // Added the required notificationId parameter
-        title: activity.title,
-        body: 'Starting in ${activity.notificationMinutesBefore} minutes',
-        scheduledDate: DateTime.parse(activity.activityDate)
-            .add(Duration(minutes: -activity.notificationMinutesBefore)),
-        isRecurring: activity.isRecurring,
-      );
-
+      await notificationService.scheduleActivityNotification(activity);
       _logger.info('Scheduled notification for activity: ${activity.title}');
     } catch (e, stackTrace) {
       _logger.error('Error scheduling notification for activity: ${activity.title}', e, stackTrace);

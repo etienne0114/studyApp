@@ -130,6 +130,7 @@ class MockDatabaseHelper extends _i1.Mock implements _i3.DatabaseHelper {
           )
           as _i4.Future<List<_i6.Activity>>);
 
+  @override
   _i4.Future<List<_i6.Activity>> getActivitiesByDay(int? dayOfWeek) =>
       (super.noSuchMethod(
             Invocation.method(#getActivitiesByDay, [dayOfWeek]),
@@ -137,6 +138,7 @@ class MockDatabaseHelper extends _i1.Mock implements _i3.DatabaseHelper {
           )
           as _i4.Future<List<_i6.Activity>>);
 
+  @override
   _i4.Future<_i6.Activity?> getActivity(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getActivity, [id]),
@@ -226,6 +228,7 @@ class MockNotificationService extends _i1.Mock
     _i1.throwOnMissingStub(this);
   }
 
+  @override
   _i4.Future<bool> init() =>
       (super.noSuchMethod(
             Invocation.method(#init, []),
@@ -233,6 +236,7 @@ class MockNotificationService extends _i1.Mock
           )
           as _i4.Future<bool>);
 
+  @override
   _i4.Future<bool> requestPermissions() =>
       (super.noSuchMethod(
             Invocation.method(#requestPermissions, []),
@@ -241,24 +245,9 @@ class MockNotificationService extends _i1.Mock
           as _i4.Future<bool>);
 
   @override
-  _i4.Future<void> scheduleActivityNotification(
-    _i6.Activity activity, {
-    required String body,
-    bool isRecurring = false,
-    required int notificationId,
-    required DateTime scheduledDate,
-    required String title,
-  }) =>
+  _i4.Future<void> scheduleActivityNotification(_i6.Activity? activity) =>
       (super.noSuchMethod(
-            Invocation.method(#scheduleActivityNotification, [
-              activity,
-            ], {
-              #body: body,
-              #isRecurring: isRecurring,
-              #notificationId: notificationId,
-              #scheduledDate: scheduledDate,
-              #title: title,
-            }),
+            Invocation.method(#scheduleActivityNotification, [activity]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )

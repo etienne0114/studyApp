@@ -49,7 +49,7 @@ void main() async {
     await _databaseHelper.database;
     appLogger.info('Database initialized successfully');
     
-    _notificationService = NotificationService();
+    _notificationService = NotificationService.instance;
     await _notificationService.initialize();
     appLogger.info('Notification service initialized successfully');
     
@@ -197,12 +197,4 @@ Future<void> _initializeApp() async {
     appLogger.error('Error initializing app: $e');
     rethrow;
   }
-}
-
-void initializeServices() async {
-  // Initialize notification service
-  _notificationService = NotificationService();
-  await _notificationService.initialize();
-  
-  // Initialize other services...
 }

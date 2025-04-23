@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:study_scheduler/data/repositories/study_materials_repository.dart';
-import 'package:study_scheduler/data/helpers/file_picker_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as path;
 
@@ -79,6 +78,15 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
     super.dispose();
   }
 
+  void _handleFilePath(String filePath) {
+    if (filePath.isEmpty) return;
+    
+    setState(() {
+      _filePath = filePath;
+      _fileType = path.extension(filePath).toLowerCase().replaceAll('.', '');
+      _isOnline = false;
+    });
+  }
 
   void _validateUrl(String url) {
     final uri = Uri.tryParse(url);
@@ -319,67 +327,21 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
             ),
             const SizedBox(height: 16),
             if (!_isOnline) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _filePathController,
-                      decoration: const InputDecoration(
-                        labelText: 'File Path',
-                        border: OutlineInputBorder(),
-                        hintText: 'Select a file...',
-                        prefixIcon: Icon(Icons.attach_file),
-                      ),
-                      readOnly: true,
-                      onTap: () async {
-                        final allowedExtensions = FilePickerHelper.getAllowedExtensions(_selectedCategory);
-                        final filePath = await FilePickerHelper.pickFile(
-                          allowedExtensions: allowedExtensions,
-                          dialogTitle: 'Select ${_selectedCategory.toLowerCase()} file',
-                        );
-                        
-                        if (filePath != null) {
-                          setState(() {
-                            _filePath = filePath;
-                            _filePathController.text = filePath;
-                            _fileType = FilePickerHelper.getFileType(filePath);
-                          });
-                        }
-                      },
-                      validator: (value) {
-                        if (!_isOnline && (value == null || value.isEmpty)) {
-                          return 'Please select a file';
-                        }
-                        if (!_isOnline && value != null && value.isNotEmpty) {
-                          final allowedTypes = FilePickerHelper.getAllowedExtensions(_selectedCategory);
-                          if (!FilePickerHelper.isValidFileType(value, allowedTypes)) {
-                            return 'Invalid file type for ${_selectedCategory.toLowerCase()}';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.folder_open),
-                    onPressed: () async {
-                      final allowedExtensions = FilePickerHelper.getAllowedExtensions(_selectedCategory);
-                      final filePath = await FilePickerHelper.pickFile(
-                        allowedExtensions: allowedExtensions,
-                        dialogTitle: 'Select ${_selectedCategory.toLowerCase()} file',
-                      );
-                      
-                      if (filePath != null) {
-                        setState(() {
-                          _filePath = filePath;
-                          _filePathController.text = filePath;
-                          _fileType = FilePickerHelper.getFileType(filePath);
-                        });
-                      }
-                    },
-                  ),
-                ],
+              TextFormField(
+                controller: _filePathController,
+                decoration: const InputDecoration(
+                  labelText: 'File Path',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter the full path to your file',
+                  prefixIcon: Icon(Icons.attach_file),
+                ),
+                onChanged: _handleFilePath,
+                validator: (value) {
+                  if (!_isOnline && (value == null || value.isEmpty)) {
+                    return 'Please enter a file path';
+                  }
+                  return null;
+                },
               ),
               if (_filePath != null) ...[
                 const SizedBox(height: 8),
@@ -393,16 +355,6 @@ class _AddMaterialScreenState extends State<AddMaterialScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text('Type: ${_fileType?.toUpperCase() ?? 'Unknown'}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      setState(() {
-                        _filePath = null;
-                        _filePathController.clear();
-                        _fileType = null;
-                      });
-                    },
-                  ),
                 ),
               ],
             ] else ...[

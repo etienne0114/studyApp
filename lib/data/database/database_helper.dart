@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:sqflite/sqlite_api.dart';  // Add this import for ConflictAlgorithm
 import 'package:study_scheduler/data/models/activity.dart';
 import 'package:study_scheduler/data/models/schedule.dart';
 import 'package:study_scheduler/data/models/study_material.dart';
@@ -33,15 +32,11 @@ class DatabaseHelper {
     try {
       String path = join(await sqflite.getDatabasesPath(), 'study_scheduler.db');
       
-      // Delete existing database to force recreation
-      await sqflite.deleteDatabase(path);
-      _logger.info('Existing database deleted for clean recreation');
-      
       return await sqflite.openDatabase(
-      path,
-        version: 1, // Reset to version 1 since we're recreating
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
+        path,
+        version: 4,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
         onDowngrade: _onDowngrade,
       );
     } catch (e) {
@@ -80,42 +75,6 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(sqflite.Database db, int oldVersion, int newVersion) async {
     try {
-      if (oldVersion < 5) {
-        // Backup existing activities
-        List<Map<String, dynamic>> existingActivities = [];
-        try {
-          existingActivities = await db.query('activities');
-        } catch (e) {
-          _logger.error('Error backing up activities: $e');
-        }
-        
-        // Drop and recreate the activities table with the new schema
-        await db.execute('DROP TABLE IF EXISTS activities');
-        await _createActivitiesTable(db);
-        
-        // Restore activities with the new activityDate field
-        for (var activity in existingActivities) {
-          try {
-            // Set activityDate to createdAt date or current date if createdAt is null
-            String activityDate = activity['createdAt'] != null 
-              ? DateTime.parse(activity['createdAt']).toIso8601String().split('T')[0]
-              : DateTime.now().toIso8601String().split('T')[0];
-              
-            activity['activityDate'] = activityDate;
-            
-            // Remove id to let it auto-increment
-            activity.remove('id');
-            
-            await db.insert('activities', activity);
-          } catch (e) {
-            _logger.error('Error restoring activity: $e');
-            continue;
-          }
-        }
-        
-        _logger.info('Successfully migrated activities table to include activityDate');
-      }
-      
       if (oldVersion < 3) {
         // Drop and recreate the activities table with the new schema
         await db.execute('DROP TABLE IF EXISTS activities');
@@ -154,7 +113,6 @@ class DatabaseHelper {
         notificationMinutesBefore INTEGER DEFAULT 15,
         location TEXT,
         dayOfWeek INTEGER NOT NULL,
-        activityDate TEXT NOT NULL,
         isRecurring INTEGER DEFAULT 1,
         notifyBefore INTEGER DEFAULT 30,
         createdAt TEXT NOT NULL,
@@ -162,27 +120,23 @@ class DatabaseHelper {
         FOREIGN KEY (scheduleId) REFERENCES schedules (id) ON DELETE CASCADE
       )
     ''');
-    
-    // Create index for faster queries
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(activityDate)');
   }
 
   Future<void> _onCreate(sqflite.Database db, int version) async {
     try {
-    // Create schedules table
-    await db.execute('''
+      // Create schedules table
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS schedules(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          description TEXT,
           color TEXT NOT NULL,
-        isActive INTEGER DEFAULT 1,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    ''');
+          isActive INTEGER DEFAULT 1,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        )
+      ''');
 
-<<<<<<< HEAD
 <<<<<<< HEAD
       // Create activities table
       await _createActivitiesTable(db);
@@ -201,22 +155,6 @@ class DatabaseHelper {
           isCompleted INTEGER DEFAULT 0,
           notificationEnabled INTEGER DEFAULT 1,
           notificationMinutesBefore INTEGER DEFAULT 15,
-=======
-      // Create activities table with all required fields
-    await db.execute('''
-        CREATE TABLE IF NOT EXISTS activities(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        scheduleId INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-          category TEXT NOT NULL DEFAULT 'study',
-          type TEXT NOT NULL DEFAULT 'study',
-        startTime TEXT NOT NULL,
-        endTime TEXT NOT NULL,
-        isCompleted INTEGER DEFAULT 0,
-        notificationEnabled INTEGER DEFAULT 1,
-        notificationMinutesBefore INTEGER DEFAULT 15,
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
           location TEXT,
           dayOfWeek INTEGER NOT NULL,
           activityDate TEXT NOT NULL,
@@ -227,47 +165,43 @@ class DatabaseHelper {
         FOREIGN KEY (scheduleId) REFERENCES schedules (id) ON DELETE CASCADE
       )
     ''');
-<<<<<<< HEAD
 >>>>>>> parent of f1a0110 (errors 2)
-=======
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
 
-    // Create study materials table
-    await db.execute('''
+      // Create study materials table
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS study_materials(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
-        category TEXT NOT NULL,
-        filePath TEXT,
-        fileType TEXT,
-        fileUrl TEXT,
-        isOnline INTEGER DEFAULT 0,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    ''');
-    
-    // Create AI usage tracking table
-    await db.execute('''
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          description TEXT,
+          category TEXT NOT NULL,
+          filePath TEXT,
+          fileType TEXT,
+          fileUrl TEXT,
+          isOnline INTEGER DEFAULT 0,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        )
+      ''');
+      
+      // Create AI usage tracking table
+      await db.execute('''
         CREATE TABLE IF NOT EXISTS ai_usage_tracking(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        materialId INTEGER,
-        aiService TEXT NOT NULL,
-        queryText TEXT,
-        usageDate TEXT NOT NULL,
-        FOREIGN KEY (materialId) REFERENCES study_materials (id) ON DELETE CASCADE
-      )
-    ''');
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          materialId INTEGER,
+          aiService TEXT NOT NULL,
+          queryText TEXT,
+          usageDate TEXT NOT NULL,
+          FOREIGN KEY (materialId) REFERENCES study_materials (id) ON DELETE CASCADE
+        )
+      ''');
 
-    // Create indexes for faster queries
+      // Create indexes for faster queries
       await db.execute('CREATE INDEX IF NOT EXISTS idx_activities_scheduleId ON activities(scheduleId)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_activities_startTime ON activities(startTime)');
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(activityDate)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_study_materials_category ON study_materials(category)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_ai_usage_materialId ON ai_usage_tracking(materialId)');
 
-      _logger.info('Database tables and indexes created successfully');
+      _logger.info('Database tables created successfully');
     } catch (e) {
       _logger.error('Error creating database tables: $e');
       rethrow;
@@ -297,12 +231,12 @@ class DatabaseHelper {
       final map = schedule.toMap();
       map['updatedAt'] = DateTime.now().toIso8601String();
       
-    return await db.update(
-      'schedules',
+      return await db.update(
+        'schedules',
         map,
-      where: 'id = ?',
-      whereArgs: [schedule.id],
-    );
+        where: 'id = ?',
+        whereArgs: [schedule.id],
+      );
     } catch (e) {
       _logger.error('Error updating schedule: $e');
       rethrow;
@@ -312,11 +246,11 @@ class DatabaseHelper {
   Future<int> deleteSchedule(int id) async {
     try {
       final sqflite.Database db = await database;
-    return await db.delete(
-      'schedules',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+      return await db.delete(
+        'schedules',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
     } catch (e) {
       _logger.error('Error deleting schedule: $e');
       rethrow;
@@ -367,7 +301,7 @@ class DatabaseHelper {
   // Activity operations
   Future<List<Activity>> getActivitiesForDay(DateTime day) async {
     try {
-    final db = await database;
+      final db = await database;
       
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
         SELECT 
@@ -398,8 +332,8 @@ class DatabaseHelper {
       ''', [day.weekday]);
       
       _logger.info('Retrieved ${maps.length} activities for day ${day.weekday}');
-    
-    return List.generate(maps.length, (i) {
+      
+      return List.generate(maps.length, (i) {
         final map = maps[i];
         try {
           return Activity(
@@ -450,9 +384,9 @@ class DatabaseHelper {
 
   Future<List<Activity>> getActivities() async {
     try {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'activities',
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'activities',
         orderBy: 'startTime ASC'
       );
       return List.generate(maps.length, (i) => Activity.fromMap(maps[i]));
@@ -464,17 +398,17 @@ class DatabaseHelper {
 
   Future<List<Activity>> getActivitiesByScheduleId(int scheduleId) async {
     try {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'activities',
-      where: 'scheduleId = ?',
-      whereArgs: [scheduleId],
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'activities',
+        where: 'scheduleId = ?',
+        whereArgs: [scheduleId],
         orderBy: 'startTime ASC'
-    );
+      );
       
       _logger.info('Retrieved ${maps.length} activities for schedule $scheduleId');
-    
-    return List.generate(maps.length, (i) {
+      
+      return List.generate(maps.length, (i) {
         final map = maps[i];
         try {
           return Activity.fromMap(map);
@@ -499,75 +433,25 @@ class DatabaseHelper {
 
   Future<List<Activity>> getUpcomingActivities([DateTime? fromDate]) async {
     try {
-    final db = await database;
+      final db = await database;
       final now = fromDate ?? DateTime.now();
-      final tomorrow = now.add(const Duration(days: 1));
-      
-      // Format dates for SQLite
-      final todayStr = now.toIso8601String().split('T')[0];
-      final tomorrowStr = tomorrow.toIso8601String().split('T')[0];
+      final startOfDay = DateTime(now.year, now.month, now.day).toIso8601String();
       
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
         SELECT a.*, s.title as scheduleTitle, s.color as scheduleColor
         FROM activities a
-        LEFT JOIN schedules s ON a.scheduleId = s.id
-        WHERE a.activityDate BETWEEN ? AND ?
+        JOIN schedules s ON a.scheduleId = s.id
+        WHERE a.startTime >= ?
         AND (a.isCompleted IS NULL OR a.isCompleted = 0)
-        ORDER BY 
-          a.activityDate ASC,
-          CASE 
-            WHEN time(a.startTime) < time('now', 'localtime') AND a.activityDate = date('now') THEN 1 
-            ELSE 0 
-          END,
-          time(a.startTime) ASC
-      ''', [todayStr, tomorrowStr]);
+        ORDER BY a.startTime ASC
+      ''', [startOfDay]);
       
-      _logger.info('Retrieved ${maps.length} upcoming activities for next 24 hours');
-    
+      _logger.info('Retrieved ${maps.length} upcoming activities');
       return List.generate(maps.length, (i) {
-        final map = maps[i];
-        try {
-          return Activity(
-            id: map['id'] as int?,
-            scheduleId: map['scheduleId'] as int? ?? 0,
-            title: map['title']?.toString() ?? 'Untitled Activity',
-            description: map['description']?.toString(),
-            category: map['category']?.toString() ?? 'study',
-            type: map['type']?.toString() ?? 'study',
-            startTime: TimeOfDay(
-              hour: int.tryParse(map['startTime']?.toString().split(':')[0] ?? '0') ?? 0,
-              minute: int.tryParse(map['startTime']?.toString().split(':')[1] ?? '0') ?? 0,
-            ),
-            endTime: TimeOfDay(
-              hour: int.tryParse(map['endTime']?.toString().split(':')[0] ?? '0') ?? 0,
-              minute: int.tryParse(map['endTime']?.toString().split(':')[1] ?? '0') ?? 0,
-            ),
-            isCompleted: (map['isCompleted'] as int?) == 1,
-            notificationEnabled: (map['notificationEnabled'] as int?) == 1,
-            notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
-            location: map['location']?.toString(),
-            dayOfWeek: (map['dayOfWeek'] as int?) ?? now.weekday,
-            activityDate: map['activityDate']?.toString() ?? todayStr,
-            isRecurring: (map['isRecurring'] as int?) == 1,
-            notifyBefore: (map['notifyBefore'] as int?) ?? 30,
-            createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
-            updatedAt: map['updatedAt']?.toString() ?? DateTime.now().toIso8601String(),
-            scheduleTitle: map['scheduleTitle']?.toString(),
-            scheduleColor: map['scheduleColor']?.toString() ?? '#2196F3',
-          );
-        } catch (e) {
-          _logger.error('Error creating activity from map: $e');
-          return Activity(
-            scheduleId: map['scheduleId'] as int? ?? 0,
-            title: 'Error Loading Activity',
-            category: 'error',
-            startTime: TimeOfDay(hour: 0, minute: 0),
-            endTime: TimeOfDay(hour: 0, minute: 0),
-            dayOfWeek: now.weekday,
-            type: 'error',
-            activityDate: todayStr,
-          );
-        }
+        final activity = Activity.fromMap(maps[i]);
+        activity.scheduleTitle = maps[i]['scheduleTitle'] as String;
+        activity.scheduleColor = maps[i]['scheduleColor'] as String;
+        return activity;
       });
     } catch (e) {
       _logger.error('Error getting upcoming activities: $e');
@@ -578,18 +462,20 @@ class DatabaseHelper {
   Future<List<Activity>> getCompletedActivities() async {
     try {
       final db = await database;
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day).toIso8601String();
+      final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59).toIso8601String();
       
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
         SELECT a.*, s.title as scheduleTitle, s.color as scheduleColor
         FROM activities a
-        LEFT JOIN schedules s ON a.scheduleId = s.id
+        JOIN schedules s ON a.scheduleId = s.id
         WHERE a.isCompleted = 1
-        ORDER BY a.activityDate DESC, a.startTime DESC
-        LIMIT 50
-      ''');
+        AND a.startTime BETWEEN ? AND ?
+        ORDER BY a.startTime DESC
+      ''', [startOfDay, endOfDay]);
       
       _logger.info('Retrieved ${maps.length} completed activities');
-<<<<<<< HEAD
       return List.generate(maps.length, (i) {
 <<<<<<< HEAD
         final activity = Activity.fromMap(maps[i]);
@@ -597,9 +483,6 @@ class DatabaseHelper {
         activity.scheduleColor = maps[i]['scheduleColor'] as String;
         return activity;
 =======
-=======
-    return List.generate(maps.length, (i) {
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
         final map = maps[i];
         try {
           return Activity(
@@ -643,10 +526,7 @@ class DatabaseHelper {
             activityDate: DateTime.now().toIso8601String().split('T')[0],
           );
         }
-<<<<<<< HEAD
 >>>>>>> parent of f1a0110 (errors 2)
-=======
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
       });
     } catch (e) {
       _logger.error('Error getting completed activities: $e');
@@ -654,65 +534,11 @@ class DatabaseHelper {
     }
   }
 
-  // Delete a completed activity
-  Future<bool> deleteCompletedActivity(int id) async {
-    try {
-      final db = await database;
-      final result = await db.delete(
-        'activities',
-        where: 'id = ? AND isCompleted = 1',
-        whereArgs: [id],
-      );
-      
-      _logger.info('Deleted completed activity with id: $id');
-      return result > 0;
-    } catch (e) {
-      _logger.error('Error deleting completed activity: $e');
-      return false;
-    }
-  }
-
-  // Delete all completed activities
-  Future<int> deleteAllCompletedActivities() async {
-    try {
-      final db = await database;
-      final result = await db.delete(
-        'activities',
-        where: 'isCompleted = 1',
-      );
-      
-      _logger.info('Deleted $result completed activities');
-      return result;
-    } catch (e) {
-      _logger.error('Error deleting all completed activities: $e');
-      return 0;
-    }
-  }
-
-  // Get completed activities count
-  Future<int> getCompletedActivitiesCount() async {
-    try {
-      final db = await database;
-      final result = await db.rawQuery('''
-        SELECT COUNT(*) as count
-        FROM activities
-        WHERE isCompleted = 1
-      ''');
-      
-      final count = result.first['count'] as int? ?? 0;
-      _logger.info('Found $count completed activities');
-      return count;
-    } catch (e) {
-      _logger.error('Error getting completed activities count: $e');
-      return 0;
-    }
-  }
-
   Future<List<Activity>> getActivitiesForSchedule(int scheduleId) async {
     try {
       final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'activities',
+      final List<Map<String, dynamic>> maps = await db.query(
+        'activities',
         where: 'scheduleId = ?',
         whereArgs: [scheduleId],
         orderBy: 'startTime ASC'
@@ -727,7 +553,6 @@ class DatabaseHelper {
 
   Future<int> insertActivity(Activity activity) async {
     try {
-<<<<<<< HEAD
 <<<<<<< HEAD
       final db = await database;
       final now = DateTime.now();
@@ -744,78 +569,8 @@ class DatabaseHelper {
         throw Exception('Activity date cannot be null or empty');
       }
 >>>>>>> parent of f1a0110 (errors 2)
-=======
-      _logger.info('Inserting activity: ${activity.title}');
-    final db = await database;
       
-      // Ensure we have a valid activity date
-      if (activity.activityDate.isEmpty) {
-        throw Exception('Activity date cannot be null or empty');
-      }
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
-      
-      // Convert activity to map
-      final Map<String, dynamic> activityMap = {
-        'scheduleId': activity.scheduleId,
-        'title': activity.title,
-        'description': activity.description,
-        'category': activity.category,
-        'type': activity.type,
-        'startTime': '${activity.startTime.hour.toString().padLeft(2, '0')}:${activity.startTime.minute.toString().padLeft(2, '0')}',
-        'endTime': '${activity.endTime.hour.toString().padLeft(2, '0')}:${activity.endTime.minute.toString().padLeft(2, '0')}',
-        'isCompleted': activity.isCompleted ? 1 : 0,
-        'notificationEnabled': activity.notificationEnabled ? 1 : 0,
-        'notificationMinutesBefore': activity.notificationMinutesBefore,
-        'location': activity.location,
-        'dayOfWeek': activity.dayOfWeek,
-        'activityDate': activity.activityDate,  // Use the specific date
-        'isRecurring': activity.isRecurring ? 1 : 0,
-        'notifyBefore': activity.notifyBefore,
-        'createdAt': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
-      };
-      
-      // Remove id if it's 0 or null to let SQLite auto-increment
-      if (activity.id == null || activity.id == 0) {
-        activityMap.remove('id');
-      } else {
-        activityMap['id'] = activity.id;
-      }
-      
-      _logger.info('Inserting activity with data: $activityMap');
-      
-      // Check if an activity already exists for this date and time slot
-      final List<Map<String, dynamic>> existing = await db.query(
-        'activities',
-        where: 'activityDate = ? AND startTime = ? AND endTime = ? AND scheduleId = ?',
-        whereArgs: [
-          activity.activityDate,
-          activityMap['startTime'],
-          activityMap['endTime'],
-          activity.scheduleId
-        ],
-      );
-      
-      if (existing.isNotEmpty) {
-        _logger.info('Activity already exists for this date and time slot. Updating instead.');
-        final existingId = existing.first['id'] as int;
-        return await db.update(
-          'activities',
-          activityMap,
-          where: 'id = ?',
-          whereArgs: [existingId],
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      
-      final id = await db.insert(
-        'activities',
-        activityMap,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-      
-      _logger.info('Activity inserted with id: $id');
-      return id;
+      return await db.insert('activities', map);
     } catch (e) {
       _logger.error('Error inserting activity: $e');
       rethrow;
@@ -824,16 +579,16 @@ class DatabaseHelper {
 
   Future<int> updateActivity(Activity activity) async {
     try {
-    final db = await database;
-    final map = activity.toMap();
+      final db = await database;
+      final map = activity.toMap();
       map['updatedAt'] = DateTime.now().toIso8601String();
-    
-    return await db.update(
-      'activities',
-      map,
-      where: 'id = ?',
-      whereArgs: [activity.id],
-    );
+      
+      return await db.update(
+        'activities',
+        map,
+        where: 'id = ?',
+        whereArgs: [activity.id],
+      );
     } catch (e) {
       _logger.error('Error updating activity: $e');
       rethrow;
@@ -842,12 +597,12 @@ class DatabaseHelper {
 
   Future<int> deleteActivity(int id) async {
     try {
-    final db = await database;
-    return await db.delete(
-      'activities',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+      final db = await database;
+      return await db.delete(
+        'activities',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
     } catch (e) {
       _logger.error('Error deleting activity: $e');
       rethrow;
@@ -898,7 +653,7 @@ class DatabaseHelper {
         'study_materials',
         orderBy: 'updatedAt DESC'
       );
-    return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
+      return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
     } catch (e) {
       _logger.error('Error getting study materials: $e');
       return [];
@@ -922,13 +677,13 @@ class DatabaseHelper {
   Future<List<StudyMaterial>> getStudyMaterialsByCategory(String category) async {
     try {
       final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'study_materials',
-      where: 'category = ?',
-      whereArgs: [category],
+      final List<Map<String, dynamic>> maps = await db.query(
+        'study_materials',
+        where: 'category = ?',
+        whereArgs: [category],
         orderBy: 'updatedAt DESC'
-    );
-    return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
+      );
+      return List.generate(maps.length, (i) => StudyMaterial.fromMap(maps[i]));
     } catch (e) {
       _logger.error('Error getting study materials by category: $e');
       return [];
@@ -1142,7 +897,7 @@ class DatabaseHelper {
       rethrow;
     }
   }
-  
+
   Future<void> resetDatabase() async {
     try {
       final dbPath = await sqflite.getDatabasesPath();
@@ -1157,10 +912,7 @@ class DatabaseHelper {
     }
   }
 <<<<<<< HEAD
-<<<<<<< HEAD
 =======
-=======
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
   
   Future<List<Activity>> getActivitiesForMonth(DateTime startDate, DateTime endDate) async {
     try {
@@ -1170,15 +922,9 @@ class DatabaseHelper {
       // Format dates for SQLite in yyyy-MM-dd format
       final startDateStr = startDate.toIso8601String().split('T')[0];
       final endDateStr = endDate.toIso8601String().split('T')[0];
-<<<<<<< HEAD
       
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
         SELECT 
-=======
-    
-      final List<Map<String, dynamic>> maps = await db.rawQuery('''
-        SELECT DISTINCT
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
           a.*,
           s.title as scheduleTitle,
           s.color as scheduleColor
@@ -1216,11 +962,7 @@ class DatabaseHelper {
             notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
             location: map['location']?.toString(),
             dayOfWeek: (map['dayOfWeek'] as int?) ?? startDate.weekday,
-<<<<<<< HEAD
             activityDate: activityDate,  // Use the specific date from the database
-=======
-            activityDate: activityDate,
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
             isRecurring: (map['isRecurring'] as int?) == 1,
             notifyBefore: (map['notifyBefore'] as int?) ?? 30,
             createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
@@ -1247,8 +989,5 @@ class DatabaseHelper {
       return [];
     }
   }
-<<<<<<< HEAD
 >>>>>>> parent of f1a0110 (errors 2)
-=======
->>>>>>> f1a01100da4ddb48e326900c54db078e763ef656
 }
