@@ -10,7 +10,6 @@ import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:flutter/foundation.dart'; // Add this import for kDebugMode
 import 'package:study_scheduler/data/helpers/logger.dart';
 import 'package:flutter/material.dart'; // Add this import for TimeOfDay
-import 'package:intl/intl.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -169,33 +168,33 @@ class DatabaseHelper {
 
   Future<void> _onCreate(sqflite.Database db, int version) async {
     try {
-      // Create schedules table
-      await db.execute('''
+    // Create schedules table
+    await db.execute('''
         CREATE TABLE IF NOT EXISTS schedules(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          description TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
           color TEXT NOT NULL,
-          isActive INTEGER DEFAULT 1,
-          createdAt TEXT NOT NULL,
-          updatedAt TEXT NOT NULL
-        )
-      ''');
+        isActive INTEGER DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
 
       // Create activities table with all required fields
-      await db.execute('''
+    await db.execute('''
         CREATE TABLE IF NOT EXISTS activities(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          scheduleId INTEGER NOT NULL,
-          title TEXT NOT NULL,
-          description TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scheduleId INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
           category TEXT NOT NULL DEFAULT 'study',
           type TEXT NOT NULL DEFAULT 'study',
-          startTime TEXT NOT NULL,
-          endTime TEXT NOT NULL,
-          isCompleted INTEGER DEFAULT 0,
-          notificationEnabled INTEGER DEFAULT 1,
-          notificationMinutesBefore INTEGER DEFAULT 15,
+        startTime TEXT NOT NULL,
+        endTime TEXT NOT NULL,
+        isCompleted INTEGER DEFAULT 0,
+        notificationEnabled INTEGER DEFAULT 1,
+        notificationMinutesBefore INTEGER DEFAULT 15,
           location TEXT,
           dayOfWeek INTEGER NOT NULL,
           activityDate TEXT NOT NULL,
@@ -445,11 +444,11 @@ class DatabaseHelper {
       where: 'scheduleId = ?',
       whereArgs: [scheduleId],
         orderBy: 'startTime ASC'
-      );
+    );
       
       _logger.info('Retrieved ${maps.length} activities for schedule $scheduleId');
-      
-      return List.generate(maps.length, (i) {
+    
+    return List.generate(maps.length, (i) {
         final map = maps[i];
         try {
           return Activity.fromMap(map);
@@ -474,7 +473,7 @@ class DatabaseHelper {
 
   Future<List<Activity>> getUpcomingActivities([DateTime? fromDate]) async {
     try {
-      final db = await database;
+    final db = await database;
       final now = fromDate ?? DateTime.now();
       final tomorrow = now.add(const Duration(days: 1));
       
@@ -564,7 +563,7 @@ class DatabaseHelper {
       ''');
       
       _logger.info('Retrieved ${maps.length} completed activities');
-      return List.generate(maps.length, (i) {
+    return List.generate(maps.length, (i) {
         final map = maps[i];
         try {
           return Activity(
@@ -689,10 +688,10 @@ class DatabaseHelper {
   Future<int> insertActivity(Activity activity) async {
     try {
       _logger.info('Inserting activity: ${activity.title}');
-      final db = await database;
+    final db = await database;
       
       // Ensure we have a valid activity date
-      if (activity.activityDate == null || activity.activityDate.isEmpty) {
+      if (activity.activityDate.isEmpty) {
         throw Exception('Activity date cannot be null or empty');
       }
       
@@ -1107,9 +1106,9 @@ class DatabaseHelper {
       // Format dates for SQLite in yyyy-MM-dd format
       final startDateStr = startDate.toIso8601String().split('T')[0];
       final endDateStr = endDate.toIso8601String().split('T')[0];
-      
+    
       final List<Map<String, dynamic>> maps = await db.rawQuery('''
-        SELECT 
+        SELECT DISTINCT
           a.*,
           s.title as scheduleTitle,
           s.color as scheduleColor
@@ -1147,7 +1146,7 @@ class DatabaseHelper {
             notificationMinutesBefore: (map['notificationMinutesBefore'] as int?) ?? 15,
             location: map['location']?.toString(),
             dayOfWeek: (map['dayOfWeek'] as int?) ?? startDate.weekday,
-            activityDate: activityDate,  // Use the specific date from the database
+            activityDate: activityDate,
             isRecurring: (map['isRecurring'] as int?) == 1,
             notifyBefore: (map['notifyBefore'] as int?) ?? 30,
             createdAt: map['createdAt']?.toString() ?? DateTime.now().toIso8601String(),

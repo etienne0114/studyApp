@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:study_scheduler/constants/app_colors.dart';
-import 'package:study_scheduler/constants/app_styles.dart';
 import 'package:study_scheduler/data/database/database_helper.dart';
 import 'package:study_scheduler/data/models/activity.dart';
 import 'package:study_scheduler/data/models/schedule.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_activity_screen.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_schedule_screen.dart';
-import 'package:study_scheduler/ui/screens/home/widgets/upcoming_activities.dart';
 import 'package:intl/intl.dart';
 import 'package:study_scheduler/data/helpers/logger.dart';
 

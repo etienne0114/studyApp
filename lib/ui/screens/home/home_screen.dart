@@ -8,7 +8,6 @@ import 'package:study_scheduler/data/models/activity.dart';
 import 'package:study_scheduler/data/models/schedule.dart';
 import 'package:study_scheduler/data/models/study_material.dart';
 import 'package:study_scheduler/managers/ai_assistant_manager.dart';
-import 'package:study_scheduler/ui/dialogs/ai_assistant_dialog.dart';
 import 'package:study_scheduler/ui/screens/profile/profile_screen.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_activity_screen.dart';
 import 'package:study_scheduler/ui/screens/schedule/add_schedule_screen.dart';
@@ -44,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _tagsController = TextEditingController();
   final _notesController = TextEditingController();
   final _logger = Logger('HomeScreen');
-  Schedule? _selectedSchedule;
   
   late AIAssistantManager _aiManager;
   
@@ -313,8 +311,8 @@ class _HomeScreenState extends State<HomeScreen> {
   
   void _editActivity(Activity activity) async {
     final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
+                  context,
+                  MaterialPageRoute(
         builder: (context) => AddActivityScreen(
           scheduleId: activity.scheduleId,
           activity: activity,
@@ -356,8 +354,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
                           child: const Text('Cancel'),
-                        ),
-                        TextButton(
+            ),
+            TextButton(
                           onPressed: () => Navigator.pop(context, true),
                           child: const Text('Delete All'),
                         ),
@@ -380,7 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 icon: const Icon(Icons.delete_sweep),
                 label: const Text('Clear All'),
-              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -397,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _completedActivities.length,
-            itemBuilder: (context, index) {
+                  itemBuilder: (context, index) {
               final activity = _completedActivities[index];
               return Dismissible(
                 key: Key('completed_activity_${activity.id}'),
@@ -494,28 +492,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             },
-          ),
+              ),
       ],
     );
   }
   
-  Future<List<Activity>> _getUpcomingActivities() async {
-    try {
-      return await DatabaseHelper.instance.getUpcomingActivities();
-    } catch (e) {
-      _logger.error('Error getting upcoming activities: $e');
-      return [];
-    }
-  }
   
-  Future<List<Activity>> _getCompletedActivities() async {
-    try {
-      return await DatabaseHelper.instance.getCompletedActivities();
-    } catch (e) {
-      _logger.error('Error getting completed activities: $e');
-      return [];
-    }
-  }
   
   Future<void> _markActivityAsCompleted(Activity activity) async {
     try {
@@ -786,15 +768,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
                   final now = DateTime.now();
                   final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AddActivityScreen(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddActivityScreen(
                         scheduleId: _schedules.first.id!,
                         selectedDate: now,
                         initialDayOfWeek: now.weekday,
-                      ),
-                    ),
-                  );
+              ),
+            ),
+          );
                   if (result == true) {
                     _loadData();
                   }
@@ -806,11 +788,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   Navigator.pop(context);
                   final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AddMaterialScreen(),
-                    ),
-                  );
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AddMaterialScreen(),
+            ),
+          );
                   if (result == true && mounted) {
                     _loadData();
                   }
@@ -823,7 +805,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  void _showAIAssistant() {
-    AIAssistantDialog.show(context);
-  }
 }

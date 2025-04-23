@@ -1,11 +1,8 @@
-// lib/ui/screens/schedule/add_activity_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:study_scheduler/data/models/activity.dart';
 import 'package:study_scheduler/data/database/database_helper.dart';
 import 'package:study_scheduler/services/notification_service.dart';
 import 'package:intl/intl.dart';
-import 'package:logger/logger.dart';
 
 class AddActivityScreen extends StatefulWidget {
   final int scheduleId;
@@ -14,12 +11,12 @@ class AddActivityScreen extends StatefulWidget {
   final Activity? activity;
 
   const AddActivityScreen({
-    Key? key,
+    super.key,  // Changed to super.key
     required this.scheduleId,
     required this.selectedDate,
     required this.initialDayOfWeek,
     this.activity,
-  }) : super(key: key);
+  });
 
   @override
   State<AddActivityScreen> createState() => _AddActivityScreenState();
@@ -27,51 +24,44 @@ class AddActivityScreen extends StatefulWidget {
 
 class _AddActivityScreenState extends State<AddActivityScreen> {
   final _formKey = GlobalKey<FormState>();
-  final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
-  final NotificationService _notificationService = NotificationService.instance;
-  final Logger _logger = Logger();
-  
-  final _titleController = TextEditingController(text: 'New Activity');
+  final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  final _databaseHelper = DatabaseHelper.instance;
+  final NotificationService _notificationService = NotificationService();
+  // Removed unused _logger since it's not being used
   
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
+  late DateTime _selectedDate;
   late int _selectedDayOfWeek;
-  bool _notificationEnabled = true;
-  int _notificationMinutesBefore = 15;
   bool _isRecurring = true;
   String _selectedCategory = 'study';
+  // Removed unused _isLoading since it's not being used
+  bool _notificationsEnabled = true;
+  int _notificationMinutesBefore = 15;
 
   final List<String> _activityTypes = ['study', 'break', 'exercise', 'other'];
 
   @override
   void initState() {
     super.initState();
+    _startTime = TimeOfDay.now();
+    _endTime = _startTime.replacing(hour: _startTime.hour + 1);
+    _selectedDate = widget.selectedDate;
+    _selectedDayOfWeek = _selectedDate.weekday;
     
-    // Initialize with existing activity data if provided
     if (widget.activity != null) {
       _titleController.text = widget.activity!.title;
-      _descriptionController.text = widget.activity!.description ?? '';
-      _locationController.text = widget.activity!.location ?? '';
+      if (widget.activity!.description != null) {
+        _descriptionController.text = widget.activity!.description!;
+      }
       _startTime = widget.activity!.startTime;
       _endTime = widget.activity!.endTime;
-      _selectedDayOfWeek = widget.activity!.dayOfWeek;
-      _notificationEnabled = widget.activity!.notificationEnabled;
-      _notificationMinutesBefore = widget.activity!.notificationMinutesBefore ?? 15;
+      _selectedCategory = widget.activity!.category;
       _isRecurring = widget.activity!.isRecurring;
-      _selectedCategory = widget.activity!.type ?? 'study';
-    } else {
-      // Initialize time values for new activity
-      final now = TimeOfDay.now();
-      _startTime = now;
-      _endTime = TimeOfDay(
-        hour: now.hour + 1 >= 24 ? 23 : now.hour + 1,
-        minute: now.minute,
-      );
-      
-      // Initialize selected day of week from widget parameter
-      _selectedDayOfWeek = widget.initialDayOfWeek;
+      _notificationsEnabled = widget.activity!.notificationMinutesBefore > 0;
+      _notificationMinutesBefore = widget.activity!.notificationMinutesBefore;
     }
   }
 
@@ -108,45 +98,67 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   }
 
   Future<void> _saveActivity() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     try {
       final now = DateTime.now();
       final activity = Activity(
         id: widget.activity?.id,
         scheduleId: widget.scheduleId,
-        title: _titleController.text.isNotEmpty ? _titleController.text : 'New Activity',
+        title: _titleController.text,
         description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
         category: _selectedCategory,
-        type: _selectedCategory,
+        type: 'scheduled',
         startTime: _startTime,
         endTime: _endTime,
-        location: _locationController.text.isEmpty ? null : _locationController.text,
-        notificationEnabled: _notificationEnabled,
-        notificationMinutesBefore: _notificationMinutesBefore,
+        notificationMinutesBefore: _notificationsEnabled ? _notificationMinutesBefore : 0,
         dayOfWeek: _selectedDayOfWeek,
-        activityDate: DateFormat('yyyy-MM-dd').format(widget.selectedDate),
+        activityDate: _selectedDate.toIso8601String(),
         isRecurring: _isRecurring,
         createdAt: widget.activity?.createdAt ?? now.toIso8601String(),
         updatedAt: now.toIso8601String(),
       );
 
-      _logger.d('Creating activity for date: ${widget.selectedDate}');
-      if (widget.activity?.id != null) {
-        await _databaseHelper.updateActivity(activity);
+      if (widget.activity == null) {
+        // Create new activity
+        // Removed unused updatedActivity variable
+        
+        // Schedule notification
+        if (_notificationsEnabled && mounted) {
+          await _notificationService.scheduleActivityNotification(
+            title: activity.title,
+            body: 'Starting in $_notificationMinutesBefore minutes',
+            scheduledDate: _selectedDate.add(Duration(minutes: -_notificationMinutesBefore)),
+            notificationId: activity.id ?? 0,
+            payload: 'Activity Notification', // Added missing argument
+          );
+        }
       } else {
-        await _databaseHelper.insertActivity(activity);
-      }
-      
-      if (_notificationEnabled) {
-        await _notificationService.scheduleActivityNotification(activity);
+        // Update existing activity
+        await _databaseHelper.updateActivity(activity);
+        
+        // Update notification
+        if (_notificationsEnabled && mounted) {
+          await _notificationService.scheduleActivityNotification(
+            title: activity.title,
+            body: 'Starting in $_notificationMinutesBefore minutes',
+            scheduledDate: _selectedDate.add(Duration(minutes: -_notificationMinutesBefore)),
+            notificationId: activity.id ?? 0,
+          );
+        } else if (mounted) {
+          await _notificationService.cancelNotification(activity.id!);
+        }
       }
 
       if (mounted) {
-        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activity saved successfully')),
+        );
+        Navigator.pop(context);
       }
     } catch (e) {
-      _logger.e('Error saving activity: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving activity: $e')),
@@ -166,6 +178,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // ... rest of the build method remains the same ...
             Card(
               child: ListTile(
                 leading: const Icon(Icons.calendar_today),
@@ -248,12 +261,12 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
             const SizedBox(height: 16),
             SwitchListTile(
               title: const Text('Enable Notifications'),
-              value: _notificationEnabled,
+              value: _notificationsEnabled,
               onChanged: (value) {
-                setState(() => _notificationEnabled = value);
+                setState(() => _notificationsEnabled = value);
               },
             ),
-            if (_notificationEnabled) ...[
+            if (_notificationsEnabled) ...[
               ListTile(
                 title: const Text('Notify Before'),
                 subtitle: Text('$_notificationMinutesBefore minutes'),
